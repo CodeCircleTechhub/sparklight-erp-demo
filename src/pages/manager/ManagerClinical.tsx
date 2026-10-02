@@ -1,23 +1,16 @@
+import { useState, useEffect } from 'react';
 import { Stethoscope, ClipboardList, BedDouble, ArrowUpRight } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageComponents';
+import api from '../../services/api';
 
-const stats = [
-  { label: "Today's Consultations", value: '45', icon: Stethoscope, color: 'bg-blue-500' },
-  { label: 'Pending Results', value: '12', icon: ClipboardList, color: 'bg-amber-500' },
-  { label: 'Admissions', value: '28', icon: BedDouble, color: 'bg-green-500' },
-  { label: 'Discharges', value: '15', icon: ArrowUpRight, color: 'bg-violet-500' },
-];
-
-const clinical = [
-  { patient: 'Alice Johnson', doctor: 'Dr. Smith', department: 'Cardiology', lastVisit: 'Sep 11, 2026', status: 'Under Observation' },
-  { patient: 'Bob Williams', doctor: 'Dr. Patel', department: 'Neurology', lastVisit: 'Sep 11, 2026', status: 'Admitted' },
-  { patient: 'Carol Davis', doctor: 'Dr. Lee', department: 'Pediatrics', lastVisit: 'Sep 10, 2026', status: 'Stable' },
-  { patient: 'David Brown', doctor: 'Dr. Garcia', department: 'Orthopedics', lastVisit: 'Sep 11, 2026', status: 'Post-Surgery' },
-  { patient: 'Eva Martinez', doctor: 'Dr. Kim', department: 'Oncology', lastVisit: 'Sep 09, 2026', status: 'Under Treatment' },
-  { patient: 'Frank Wilson', doctor: 'Dr. Chen', department: 'Dermatology', lastVisit: 'Sep 10, 2026', status: 'Stable' },
-  { patient: 'Grace Lee', doctor: 'Dr. Adams', department: 'Emergency', lastVisit: 'Sep 11, 2026', status: 'Critical' },
-  { patient: 'Henry Garcia', doctor: 'Dr. Brown', department: 'Radiology', lastVisit: 'Sep 08, 2026', status: 'Recovered' },
-];
+interface Consultation {
+  _id: string;
+  patient?: { fullName?: string } | null;
+  doctor?: { fullName?: string } | null;
+  department?: string;
+  status?: string;
+  date?: string;
+}
 
 const statusColors: Record<string, string> = {
   'Under Observation': 'bg-blue-100 text-blue-700',
@@ -30,10 +23,66 @@ const statusColors: Record<string, string> = {
 };
 
 export default function ManagerClinical() {
+  const [consultations, setConsultations] = useState<Consultation[]>([]);
+  const [stats, setStats] = useState([
+    { label: "Today's Consultations", value: '0', icon: Stethoscope, color: 'bg-blue-500' },
+    { label: 'Pending Results', value: '0', icon: ClipboardList, color: 'bg-amber-500' },
+    { label: 'Admissions', value: '0', icon: BedDouble, color: 'bg-green-500' },
+    { label: 'Discharges', value: '0', icon: ArrowUpRight, color: 'bg-violet-500' },
+  ]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [consultationsRes, visitsRes] = await Promise.all([
+          api.get('/clinical/consultations'),
+          api.get('/visits'),
+        ]);
+
+        const consultationsData = consultationsRes.data?.consultations || [];
+        setConsultations(consultationsData);
+
+        const visits = visitsRes.data || {};
+        const todayConsultations = consultationsData.length;
+        const pendingResults = consultationsData.filter(
+          (c: Consultation) => c.status === 'Pending' || c.status === 'Under Observation'
+        ).length;
+        const admissions = consultationsData.filter(
+          (c: Consultation) => c.status === 'Admitted'
+        ).length;
+        const discharges = visits.discharges || consultationsData.filter(
+          (c: Consultation) => c.status === 'Recovered' || c.status === 'Discharged'
+        ).length;
+
+        setStats([
+          { label: "Today's Consultations", value: String(todayConsultations), icon: Stethoscope, color: 'bg-blue-500' },
+          { label: 'Pending Results', value: String(pendingResults), icon: ClipboardList, color: 'bg-amber-500' },
+          { label: 'Admissions', value: String(admissions), icon: BedDouble, color: 'bg-green-500' },
+          { label: 'Discharges', value: String(discharges), icon: ArrowUpRight, color: 'bg-violet-500' },
+        ]);
+      } catch (err: any) {
+        setError(err?.response?.data?.message || 'Failed to load clinical data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         <PageHeader title="Clinical Overview" icon={Stethoscope} />
+
+        {error && (
+          <div className="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200">
+            {error}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {stats.map((s) => (
@@ -43,7 +92,7 @@ export default function ManagerClinical() {
                   <s.icon className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900">{s.value}</p>
+                  <p className="text-2xl font-bold text-gray-900">{loading ? '—' : s.value}</p>
                   <p className="text-sm text-gray-500">{s.label}</p>
                 </div>
               </div>
@@ -64,19 +113,31 @@ export default function ManagerClinical() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {clinical.map((c, i) => (
-                  <tr key={i} className="hover:bg-gray-50">
-                    <td className="py-3 text-gray-900">{c.patient}</td>
-                    <td className="py-3 text-gray-600 hidden md:table-cell">{c.doctor}</td>
-                    <td className="py-3 text-gray-600 hidden lg:table-cell">{c.department}</td>
-                    <td className="py-3 text-gray-600 hidden md:table-cell">{c.lastVisit}</td>
-                    <td className="py-3">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[c.status]}`}>
-                        {c.status}
-                      </span>
-                    </td>
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-gray-400">Loading...</td>
                   </tr>
-                ))}
+                ) : consultations.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-gray-400">No consultations found</td>
+                  </tr>
+                ) : (
+                  consultations.map((c, i) => (
+                    <tr key={c._id || i} className="hover:bg-gray-50">
+                      <td className="py-3 text-gray-900">{c.patient?.fullName || 'N/A'}</td>
+                      <td className="py-3 text-gray-600 hidden md:table-cell">{c.doctor?.fullName || 'N/A'}</td>
+                      <td className="py-3 text-gray-600 hidden lg:table-cell">{c.department || 'N/A'}</td>
+                      <td className="py-3 text-gray-600 hidden md:table-cell">
+                        {c.date ? new Date(c.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                      </td>
+                      <td className="py-3">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[c.status || ''] || 'bg-gray-100 text-gray-700'}`}>
+                          {c.status || 'Unknown'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

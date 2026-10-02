@@ -5,7 +5,11 @@ import {
   Mail,
   Clock,
   Send,
+  Loader2,
+  CheckCircle,
+  AlertCircle,
 } from 'lucide-react';
+import api from '../../services/api';
 
 const contactInfo = [
   {
@@ -47,6 +51,9 @@ export default function ContactPage() {
     subject: '',
     message: '',
   });
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState('');
+  const [error, setError] = useState('');
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -56,10 +63,22 @@ export default function ContactPage() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert('Thank you for your message! We will get back to you soon.');
-    setFormData({ name: '', email: '', phone: '', subject: '', message: '' });
+    setSubmitting(true);
+    setError('');
+    setSuccess('');
+    try {
+      const { data } = await api.post('/contact', formData);
+      setSuccess(
+        data.message || 'Thank you! Your message has been received. We will get back to you shortly.'
+      );
+      setFormData({ name: '', email: '', phone: '', subject: '', message: '' });
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to send message. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -113,6 +132,18 @@ export default function ContactPage() {
                 Send Us a Message
               </h2>
               <form onSubmit={handleSubmit} className="space-y-5">
+                {success && (
+                  <div className="flex items-center gap-2 bg-green-50 text-green-700 px-4 py-3 rounded-lg text-sm">
+                    <CheckCircle className="w-4 h-4 shrink-0" />
+                    {success}
+                  </div>
+                )}
+                {error && (
+                  <div className="flex items-center gap-2 bg-red-50 text-red-600 px-4 py-3 rounded-lg text-sm">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {error}
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Full Name
@@ -191,10 +222,15 @@ export default function ContactPage() {
                 </div>
                 <button
                   type="submit"
-                  className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 transition-colors"
+                  disabled={submitting}
+                  className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-60"
                 >
-                  <Send className="w-5 h-5 mr-2" />
-                  Send Message
+                  {submitting ? (
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  ) : (
+                    <Send className="w-5 h-5 mr-2" />
+                  )}
+                  {submitting ? 'Sending...' : 'Send Message'}
                 </button>
               </form>
             </div>

@@ -38,6 +38,18 @@ export default function Navbar() {
     return () => { document.body.style.overflow = ''; };
   }, [mobileOpen]);
 
+  useEffect(() => {
+    if (!mobileOpen && !loginOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setMobileOpen(false);
+        setLoginOpen(false);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [mobileOpen, loginOpen]);
+
   return (
     <>
       <nav
@@ -85,6 +97,7 @@ export default function Navbar() {
                     key={option.label}
                     to={option.to}
                     onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setLoginOpen(false)}
                     className="block px-4 py-2 text-sm text-gray-700 hover:bg-primary-50 hover:text-primary-600"
                   >
                     {option.label}

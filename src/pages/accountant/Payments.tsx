@@ -1,25 +1,13 @@
-import { CreditCard, CalendarDays, Calendar, DollarSign, MoreVertical } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { CreditCard, CalendarDays, Calendar, DollarSign, MoreVertical, Loader2, AlertCircle } from 'lucide-react';
 import { PageHeader, StatusBadge } from '../../components/ui/PageComponents';
+import api from '../../services/api';
 
-const stats = [
-  { label: 'Today', value: '₦12,450', icon: CalendarDays, color: 'bg-[#3b82f6]' },
-  { label: 'This Week', value: '₦85,200', icon: Calendar, color: 'bg-emerald-500' },
-  { label: 'This Month', value: '₦380,000', icon: DollarSign, color: 'bg-purple-500' },
-  { label: 'Total', value: '₦458,200', icon: CreditCard, color: 'bg-amber-500' },
-];
+const money = (n: number) => '₦' + Number(n || 0).toLocaleString();
+const fmtDate = (d?: string | null) => (d ? String(d).slice(0, 10) : '—');
 
-const payments = [
-  { id: 'PAY-001', patient: 'John Smith', invoice: 'INV-001', amount: 2500, method: 'Credit Card', date: '2024-01-15', status: 'Completed' },
-  { id: 'PAY-002', patient: 'Maria Garcia', invoice: 'INV-002', amount: 1000, method: 'Bank Transfer', date: '2024-01-15', status: 'Completed' },
-  { id: 'PAY-003', patient: 'Robert Johnson', invoice: 'INV-003', amount: 8500, method: 'Insurance', date: '2024-01-14', status: 'Completed' },
-  { id: 'PAY-004', patient: 'Emily Davis', invoice: 'INV-004', amount: 950, method: 'Cash', date: '2024-01-14', status: 'Pending' },
-  { id: 'PAY-005', patient: 'Michael Wilson', invoice: 'INV-005', amount: 4500, method: 'Credit Card', date: '2024-01-13', status: 'Completed' },
-  { id: 'PAY-006', patient: 'Sarah Brown', invoice: 'INV-006', amount: 600, method: 'Mobile Pay', date: '2024-01-13', status: 'Completed' },
-  { id: 'PAY-007', patient: 'David Lee', invoice: 'INV-007', amount: 800, method: 'Cash', date: '2024-01-12', status: 'Completed' },
-  { id: 'PAY-008', patient: 'Emma Wilson', invoice: 'INV-008', amount: 1500, method: 'Bank Transfer', date: '2024-01-12', status: 'Pending' },
-  { id: 'PAY-009', patient: 'James Taylor', invoice: 'INV-009', amount: 5000, method: 'Insurance', date: '2024-01-11', status: 'Completed' },
-  { id: 'PAY-010', patient: 'Lisa Anderson', invoice: 'INV-010', amount: 2200, method: 'Credit Card', date: '2024-01-11', status: 'Completed' },
-];
+const sameDay = (d: Date, ref: Date) =>
+  d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth() && d.getDate() === ref.getDate();
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -30,17 +18,55 @@ const getStatusColor = (status: string) => {
 };
 
 export default function Payments() {
+  const [payments, setPayments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const { data } = await api.get('/billing/payments');
+        setPayments(data.payments || []);
+      } catch (err: any) {
+        setError(err.response?.data?.message || 'Failed to load payments');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const now = new Date();
+  const weekAgo = new Date(Date.now() - 7 * 86400000);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const sumFrom = (from: Date) =>
+    payments.filter((p) => new Date(p.date) >= from).reduce((s, p) => s + (p.amount || 0), 0);
+
+  const stats = [
+    { label: 'Today', value: money(payments.filter((p) => sameDay(new Date(p.date), now)).reduce((s, p) => s + (p.amount || 0), 0)), icon: CalendarDays, color: 'bg-[#3b82f6]' },
+    { label: 'This Week', value: money(sumFrom(weekAgo)), icon: Calendar, color: 'bg-emerald-500' },
+    { label: 'This Month', value: money(sumFrom(monthStart)), icon: DollarSign, color: 'bg-purple-500' },
+    { label: 'Total', value: money(payments.reduce((s, p) => s + (p.amount || 0), 0)), icon: CreditCard, color: 'bg-amber-500' },
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-6 py-6">
         <PageHeader title="Payments" icon={CreditCard} />
+        {error && (
+          <div className="mb-6 flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {error}
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {stats.map((s) => {
             const Icon = s.icon;
             return (
               <div key={s.label} className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className={`₦{s.color} p-2 rounded-lg`}>
+                  <div className={`${s.color} p-2 rounded-lg`}>
                     <Icon className="w-5 h-5 text-white" />
                   </div>
                   <span className="text-sm text-gray-500">{s.label}</span>
@@ -52,6 +78,12 @@ export default function Payments() {
         </div>
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
           <div className="overflow-x-auto">
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-12 text-sm text-gray-500">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Loading payments...
+              </div>
+            ) : (
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-100">
@@ -62,19 +94,29 @@ export default function Payments() {
               </thead>
               <tbody>
                 {payments.map((p) => (
-                  <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-4 text-sm font-medium text-[#3b82f6]">{p.id}</td>
-                    <td className="px-5 py-4 text-sm text-gray-900">{p.patient}</td>
-                    <td className="px-5 py-4 text-sm text-gray-500">{p.invoice}</td>
-                    <td className="px-5 py-4 text-sm font-medium text-gray-900">₦{p.amount.toLocaleString()}</td>
+                  <tr key={p._id || p.paymentId} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                    <td className="px-5 py-4 text-sm font-medium text-[#3b82f6]">{p.paymentId}</td>
+                    <td className="px-5 py-4 text-sm text-gray-900">
+                      {p.patient
+                        ? [p.patient.firstName, p.patient.surname].filter(Boolean).join(' ') || p.patient.patientId
+                        : p.patientName || '—'}
+                    </td>
+                    <td className="px-5 py-4 text-sm text-gray-500">{p.reference || '—'}</td>
+                    <td className="px-5 py-4 text-sm font-medium text-gray-900">₦{(p.amount || 0).toLocaleString()}</td>
                     <td className="px-5 py-4 text-sm text-gray-500">{p.method}</td>
-                    <td className="px-5 py-4 text-sm text-gray-500">{p.date}</td>
+                    <td className="px-5 py-4 text-sm text-gray-500">{fmtDate(p.date)}</td>
                     <td className="px-5 py-4"><StatusBadge status={p.status} color={getStatusColor(p.status) as any} /></td>
                     <td className="px-5 py-4"><button className="text-gray-400 hover:text-gray-600"><MoreVertical className="w-4 h-4" /></button></td>
                   </tr>
                 ))}
+                {payments.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-sm text-gray-400">No payments found</td>
+                  </tr>
+                )}
               </tbody>
             </table>
+            )}
           </div>
         </div>
       </div>

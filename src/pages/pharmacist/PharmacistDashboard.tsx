@@ -1,3 +1,8 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import api from '../../services/api';
+import ApplyLeaveButton from '../../components/shared/ApplyLeaveButton';
 import {
   Package,
   AlertTriangle,
@@ -8,59 +13,158 @@ import {
   ShoppingCart,
   RotateCcw,
   ClipboardList,
+  Loader2,
 } from "lucide-react";
 
-const statCards = [
-  { label: "Total Medicines", value: 450, icon: Package, color: "bg-blue-500" },
-  { label: "Low Stock", value: 12, icon: AlertTriangle, color: "bg-yellow-500" },
-  { label: "Out of Stock", value: 3, icon: XCircle, color: "bg-red-500" },
-  { label: "Expiring Soon", value: 8, icon: Clock, color: "bg-orange-500" },
-  { label: "Today's Dispensed", value: 25, icon: Pill, color: "bg-green-500" },
-  { label: "Revenue", value: "₦8,500", icon: DollarSign, color: "bg-emerald-500" },
-];
+interface PharmacyData {
+  medicines: any[];
+  total: number;
+  inStock: number;
+  lowStock: number;
+  outOfStock: number;
+  lowStockAlerts: {
+    id: string;
+    name: string;
+    currentStock: number;
+    category: string;
+    reorderLevel: number;
+  }[];
+}
 
-const lowStockAlerts = [
-  { id: 1, name: "Amoxicillin 500mg", currentStock: 5, category: "Antibiotics", reorderLevel: 20 },
-  { id: 2, name: "Metformin 1000mg", currentStock: 8, category: "Diabetes", reorderLevel: 15 },
-  { id: 3, name: "Amlodipine 5mg", currentStock: 3, category: "Cardiovascular", reorderLevel: 10 },
-  { id: 4, name: "Cetirizine 10mg", currentStock: 10, category: "Allergy", reorderLevel: 25 },
-];
-
-const pendingPrescriptions = [
-  { id: 1, patient: "Sarah Johnson", medicinesCount: 3, doctor: "Dr. Ahmed", time: "10:15 AM", status: "Pending" },
-  { id: 2, patient: "Michael Brown", medicinesCount: 2, doctor: "Dr. Ahmed", time: "10:00 AM", status: "Dispensed" },
-  { id: 3, patient: "Emma Wilson", medicinesCount: 5, doctor: "Dr. Fatima", time: "9:45 AM", status: "Pending" },
-  { id: 4, patient: "James Davis", medicinesCount: 1, doctor: "Dr. Ahmed", time: "9:30 AM", status: "Partially Dispensed" },
-  { id: 5, patient: "Olivia Martinez", medicinesCount: 4, doctor: "Dr. Fatima", time: "9:15 AM", status: "Pending" },
-  { id: 6, patient: "William Garcia", medicinesCount: 2, doctor: "Dr. Ahmed", time: "9:00 AM", status: "Dispensed" },
-];
+interface Prescription {
+  id: string;
+  patient: string;
+  medicinesCount: number;
+  doctor: string;
+  time: string;
+  status: string;
+}
 
 const quickActions = [
-  { label: "View Medicines", icon: Package, color: "bg-blue-500" },
-  { label: "Dispense Medicine", icon: ShoppingCart, color: "bg-green-500" },
-  { label: "Check Stock", icon: RotateCcw, color: "bg-purple-500" },
-  { label: "View Prescriptions", icon: ClipboardList, color: "bg-indigo-500" },
+  { label: "View Medicines", icon: Package, color: "bg-blue-500", path: "/pharmacist/medicines" },
+  { label: "Dispense Medicine", icon: ShoppingCart, color: "bg-green-500", path: "/pharmacist/dispensing" },
+  { label: "Check Stock", icon: RotateCcw, color: "bg-purple-500", path: "/pharmacist/stock" },
+  { label: "View Prescriptions", icon: ClipboardList, color: "bg-indigo-500", path: "/pharmacist/prescriptions" },
 ];
 
 const statusBadge = (status: string) => {
+  const styles: Record<string, string> = {
+    Pending: "bg-yellow-100 text-yellow-800",
+    Filled: "bg-blue-100 text-blue-800",
+    Dispensed: "bg-green-100 text-green-800",
+    "Partially Dispensed": "bg-blue-100 text-blue-800",
+    Cancelled: "bg-gray-100 text-gray-600",
+  };
   return (
-    <span className={`px-2 py-1 rounded-full text-xs font-medium ₦{styles[status] || "bg-gray-100 text-gray-800"}`}>
+    <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || "bg-gray-100 text-gray-800"}`}>
       {status}
     </span>
   );
 };
 
 export default function PharmacistDashboard() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const [pharmacyData, setPharmacyData] = useState<PharmacyData | null>(null);
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const pharmacyRes = await api.get('/pharmacy');
+        setPharmacyData({
+          ...pharmacyRes.data,
+          lowStockAlerts: (pharmacyRes.data.lowStockAlerts || []).map((a: any) => ({
+            id: a.medicineId || a._id,
+            name: a.name,
+            currentStock: a.stock,
+            category: a.category || '',
+            reorderLevel: a.minimumStock,
+          })),
+        });
+
+        try {
+          const prescriptionsRes = await api.get('/pharmacy/prescriptions');
+          const rows: Prescription[] = (prescriptionsRes.data?.items || []).map((rx: any) => ({
+            id: rx._id,
+            patient:
+              rx.patientName ||
+              (rx.patient ? `${rx.patient.firstName || ''} ${rx.patient.surname || ''}`.trim() : '') ||
+              '—',
+            medicinesCount: (rx.medications || []).length,
+            doctor: rx.doctorName || rx.doctor?.fullName || '—',
+            time: rx.date
+              ? new Date(rx.date).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+              : '—',
+            status: rx.status,
+          }));
+          setPrescriptions(rows);
+        } catch {
+          setPrescriptions([]);
+        }
+      } catch (err: any) {
+        setError(err.response?.data?.message || 'Failed to load dashboard data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="animate-spin text-blue-500" size={40} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <XCircle className="mx-auto text-red-500 mb-4" size={48} />
+          <p className="text-gray-700 text-lg">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const statCards = [
+    { label: "Total Medicines", value: pharmacyData?.total ?? 0, icon: Package, color: "bg-blue-500" },
+    { label: "Low Stock", value: pharmacyData?.lowStock ?? 0, icon: AlertTriangle, color: "bg-yellow-500" },
+    { label: "Out of Stock", value: pharmacyData?.outOfStock ?? 0, icon: XCircle, color: "bg-red-500" },
+    { label: "In Stock", value: pharmacyData?.inStock ?? 0, icon: Clock, color: "bg-orange-500" },
+    { label: "Low Stock Alerts", value: pharmacyData?.lowStockAlerts?.length ?? 0, icon: Pill, color: "bg-green-500" },
+    { label: "Prescriptions", value: prescriptions.length, icon: DollarSign, color: "bg-emerald-500" },
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-6">Welcome, Pharmacist</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Welcome, {user?.fullName || 'Pharmacist'}</h1>
+          <ApplyLeaveButton />
+        </div>
 
         {/* Stat Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
           {statCards.map((card) => (
             <div key={card.label} className="bg-white rounded-xl shadow-sm p-4 flex items-center gap-3">
-              <div className={`₦{card.color} p-2 rounded-lg text-white`}>
+              <div className={`${card.color} p-2 rounded-lg text-white`}>
                 <card.icon size={20} />
               </div>
               <div>
@@ -79,7 +183,10 @@ export default function PharmacistDashboard() {
               Low Stock Alerts
             </h2>
             <div className="space-y-3">
-              {lowStockAlerts.map((med) => (
+              {pharmacyData?.lowStockAlerts?.length === 0 && (
+                <p className="text-gray-500 text-sm">No low stock alerts.</p>
+              )}
+              {pharmacyData?.lowStockAlerts?.map((med) => (
                 <div key={med.id} className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-100">
                   <div>
                     <p className="font-medium text-gray-900">{med.name}</p>
@@ -101,9 +208,10 @@ export default function PharmacistDashboard() {
               {quickActions.map((action) => (
                 <button
                   key={action.label}
+                  onClick={() => navigate(action.path)}
                   className="flex items-center gap-3 p-4 rounded-xl border border-gray-200 hover:border-blue-300 hover:shadow-sm transition-all text-left"
                 >
-                  <div className={`₦{action.color} p-2 rounded-lg text-white`}>
+                  <div className={`${action.color} p-2 rounded-lg text-white`}>
                     <action.icon size={20} />
                   </div>
                   <span className="font-medium text-gray-900">{action.label}</span>
@@ -128,15 +236,25 @@ export default function PharmacistDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {pendingPrescriptions.map((row) => (
-                  <tr key={row.id} className="border-b border-gray-100 last:border-0">
-                    <td className="py-3 px-4 font-medium text-gray-900">{row.patient}</td>
-                    <td className="py-3 px-4 text-gray-600">{row.medicinesCount} items</td>
-                    <td className="py-3 px-4 text-gray-600">{row.doctor}</td>
-                    <td className="py-3 px-4 text-gray-500">{row.time}</td>
-                    <td className="py-3 px-4">{statusBadge(row.status)}</td>
-                  </tr>
-                ))}
+                {(() => {
+                  const pending = prescriptions.filter((p) => p.status === 'Pending' || p.status === 'Filled');
+                  if (pending.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={5} className="py-6 text-center text-gray-500">No pending prescriptions found.</td>
+                      </tr>
+                    );
+                  }
+                  return pending.map((row) => (
+                    <tr key={row.id} className="border-b border-gray-100 last:border-0">
+                      <td className="py-3 px-4 font-medium text-gray-900">{row.patient}</td>
+                      <td className="py-3 px-4 text-gray-600">{row.medicinesCount} items</td>
+                      <td className="py-3 px-4 text-gray-600">{row.doctor}</td>
+                      <td className="py-3 px-4 text-gray-500">{row.time}</td>
+                      <td className="py-3 px-4">{statusBadge(row.status)}</td>
+                    </tr>
+                  ));
+                })()}
               </tbody>
             </table>
           </div>

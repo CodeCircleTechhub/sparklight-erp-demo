@@ -1,25 +1,8 @@
-import { useState } from 'react';
-import {
-  FileText,
-  FlaskConical,
-  Pill,
-  Download,
-  Activity,
-} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { FileText, FlaskConical, Pill, Activity } from 'lucide-react';
+import api from '../../services/api';
 
-const records = [
-  { id: 1, title: 'Type 2 Diabetes Diagnosis', date: 'September 8, 2026', doctor: 'Dr. Ahmed Hassan', type: 'Diagnoses', icon: FileText },
-  { id: 2, title: 'Metformin Prescription', date: 'September 8, 2026', doctor: 'Dr. Ahmed Hassan', type: 'Prescriptions', icon: Pill },
-  { id: 3, title: 'Blood Sugar Test Results', date: 'September 2, 2026', doctor: 'Lab Services', type: 'Lab Results', icon: FlaskConical },
-  { id: 4, title: 'Complete Blood Count', date: 'September 2, 2026', doctor: 'Lab Services', type: 'Lab Results', icon: FlaskConical },
-  { id: 5, title: 'Chest X-Ray Report', date: 'August 5, 2026', doctor: 'Dr. Mike Johnson', type: 'Imaging', icon: Activity },
-  { id: 6, title: 'Amitriptyline Prescription', date: 'August 20, 2026', doctor: 'Dr. Sarah Wilson', type: 'Prescriptions', icon: Pill },
-  { id: 7, title: 'Lipid Profile Results', date: 'July 10, 2026', doctor: 'Lab Services', type: 'Lab Results', icon: FlaskConical },
-  { id: 8, title: 'Annual Physical Report', date: 'July 15, 2026', doctor: 'Dr. Ahmed Hassan', type: 'Diagnoses', icon: FileText },
-  { id: 9, title: 'Vitamin D3 Prescription', date: 'July 15, 2026', doctor: 'Dr. Ahmed Hassan', type: 'Prescriptions', icon: Pill },
-];
-
-const categories = ['All', 'Diagnoses', 'Lab Results', 'Prescriptions', 'Imaging'] as const;
+const categories = ['All', 'Diagnoses', 'Lab Results', 'Prescriptions'] as const;
 
 const typeColors: Record<string, string> = {
   Diagnoses: 'bg-blue-100 text-blue-700',
@@ -28,12 +11,42 @@ const typeColors: Record<string, string> = {
   Imaging: 'bg-amber-100 text-amber-700',
 };
 
-export default function PatientRecords() {
-  const [activeCategory, setActiveCategory] = useState<typeof categories[number]>('All');
+const typeIcon: Record<string, typeof FileText> = {
+  Diagnoses: FileText,
+  'Lab Results': FlaskConical,
+  Prescriptions: Pill,
+  Imaging: Activity,
+};
 
-  const filtered = activeCategory === 'All'
-    ? records
-    : records.filter((r) => r.type === activeCategory);
+const fmtDate = (d?: string | Date) => (d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '');
+
+export default function PatientRecords() {
+  const [records, setRecords] = useState<any[]>([]);
+  const [activeCategory, setActiveCategory] = useState<typeof categories[number]>('All');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get('/patient/records');
+        if (!cancelled) setRecords(res.data.records || []);
+      } catch (err: any) {
+        if (!cancelled) setError(err.response?.data?.message || 'Failed to load records');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const filtered = useMemo(
+    () => (activeCategory === 'All' ? records : records.filter((r) => r.type === activeCategory)),
+    [records, activeCategory]
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -56,33 +69,42 @@ export default function PatientRecords() {
           ))}
         </div>
 
+        {loading && <p className="text-sm text-gray-500">Loading records…</p>}
+        {error && <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg text-sm">{error}</div>}
+
+        {!loading && !error && filtered.length === 0 && (
+          <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-500">
+            No records in this category.
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map((record) => (
-            <div
-              key={record.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
-                  <record.icon className="w-5 h-5 text-blue-600" />
+          {filtered.map((record) => {
+            const Icon = typeIcon[record.type] || FileText;
+            return (
+              <div
+                key={record.id}
+                className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
+                    <Icon className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 truncate">{record.title}</p>
+                    <p className="text-sm text-gray-500 mt-0.5">{record.doctor || '—'}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{fmtDate(record.date)}</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 truncate">{record.title}</p>
-                  <p className="text-sm text-gray-500 mt-0.5">{record.doctor}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{record.date}</p>
+                <div className="flex items-center justify-between mt-4">
+                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${typeColors[record.type] || 'bg-gray-100 text-gray-700'}`}>
+                    {record.type}
+                  </span>
+                  {record.result && <span className="text-xs text-gray-500 truncate max-w-[50%]">{record.result}</span>}
                 </div>
               </div>
-              <div className="flex items-center justify-between mt-4">
-                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${typeColors[record.type]}`}>
-                  {record.type}
-                </span>
-                <button className="text-sm text-blue-600 hover:underline flex items-center gap-1">
-                  <Download className="w-4 h-4" />
-                  Download
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

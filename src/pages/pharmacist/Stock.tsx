@@ -1,33 +1,60 @@
-import { Package, AlertTriangle, XCircle, Clock } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Package, AlertTriangle, XCircle, Clock, Loader2, AlertCircle } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageComponents';
-
-const stats = [
-  { label: 'Total Items', value: '450', icon: Package, color: 'text-gray-600', bg: 'bg-gray-100' },
-  { label: 'Low Stock', value: '12', icon: AlertTriangle, color: 'text-yellow-600', bg: 'bg-yellow-100' },
-  { label: 'Out of Stock', value: '3', icon: XCircle, color: 'text-red-600', bg: 'bg-red-100' },
-  { label: 'Expiring Soon', value: '8', icon: Clock, color: 'text-orange-600', bg: 'bg-orange-100' },
-];
-
-const stock = [
-  { medicine: 'Amoxicillin 500mg', currentStock: 5, reorderLevel: 20, lastRestocked: 'Sep 01, 2026', status: 'Low Stock' },
-  { medicine: 'Metformin 1000mg', currentStock: 120, reorderLevel: 30, lastRestocked: 'Sep 05, 2026', status: 'Sufficient' },
-  { medicine: 'Amlodipine 5mg', currentStock: 3, reorderLevel: 10, lastRestocked: 'Aug 28, 2026', status: 'Low Stock' },
-  { medicine: 'Cetirizine 10mg', currentStock: 85, reorderLevel: 25, lastRestocked: 'Sep 08, 2026', status: 'Sufficient' },
-  { medicine: 'Ibuprofen 400mg', currentStock: 200, reorderLevel: 50, lastRestocked: 'Sep 10, 2026', status: 'Sufficient' },
-  { medicine: 'Omeprazole 20mg', currentStock: 75, reorderLevel: 20, lastRestocked: 'Sep 03, 2026', status: 'Sufficient' },
-  { medicine: 'Salbutamol Inhaler', currentStock: 0, reorderLevel: 10, lastRestocked: 'Jul 15, 2026', status: 'Out of Stock' },
-  { medicine: 'Prednisone 20mg', currentStock: 8, reorderLevel: 15, lastRestocked: 'Aug 20, 2026', status: 'Low Stock' },
-  { medicine: 'Levothyroxine 50mcg', currentStock: 90, reorderLevel: 25, lastRestocked: 'Sep 07, 2026', status: 'Sufficient' },
-  { medicine: 'Sumatriptan 50mg', currentStock: 45, reorderLevel: 15, lastRestocked: 'Sep 09, 2026', status: 'Sufficient' },
-];
+import api from '../../services/api';
 
 const statusColors: Record<string, string> = {
   Sufficient: 'bg-green-100 text-green-800',
+  'In Stock': 'bg-green-100 text-green-800',
   'Low Stock': 'bg-yellow-100 text-yellow-800',
   'Out of Stock': 'bg-red-100 text-red-800',
 };
 
+const stockLevel = (m: any) => {
+  if ((m.stock || 0) <= 0) return 'Out of Stock';
+  if ((m.stock || 0) <= (m.minimumStock || 0)) return 'Low Stock';
+  return 'Sufficient';
+};
+
+const fmtDate = (d?: string | null) =>
+  d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
 export default function Stock() {
+  const [medicines, setMedicines] = useState<any[]>([]);
+  const [counts, setCounts] = useState({ total: 0, lowStock: 0, outOfStock: 0, expiringSoon: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await api.get('/pharmacy');
+      setMedicines(data.medicines || []);
+      setCounts({
+        total: data.total || 0,
+        lowStock: data.lowStock || 0,
+        outOfStock: data.outOfStock || 0,
+        expiringSoon: data.expiringSoon || 0,
+      });
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to load stock');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const stats = [
+    { label: 'Total Items', value: String(counts.total), icon: Package, color: 'text-gray-600', bg: 'bg-gray-100' },
+    { label: 'Low Stock', value: String(counts.lowStock), icon: AlertTriangle, color: 'text-yellow-600', bg: 'bg-yellow-100' },
+    { label: 'Out of Stock', value: String(counts.outOfStock), icon: XCircle, color: 'text-red-600', bg: 'bg-red-100' },
+    { label: 'Expiring Soon', value: String(counts.expiringSoon), icon: Clock, color: 'text-orange-600', bg: 'bg-orange-100' },
+  ];
+
   return (
     <div className="space-y-6">
       <PageHeader title="Stock Management" icon={Package} />
@@ -48,32 +75,54 @@ export default function Stock() {
         ))}
       </div>
 
+      {error && (
+        <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {error}
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Medicine</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Current Stock</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Reorder Level</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Last Restocked</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {stock.map((s, i) => (
-                <tr key={i} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{s.medicine}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{s.currentStock}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{s.reorderLevel}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{s.lastRestocked}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[s.status]}`}>{s.status}</span>
-                  </td>
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-12 text-sm text-gray-500">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Loading stock...
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Medicine</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Current Stock</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Reorder Level</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Last Restocked</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {medicines.map((m) => {
+                  const level = stockLevel(m);
+                  return (
+                    <tr key={m._id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{m.name}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{m.stock}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{m.minimumStock}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{fmtDate(m.lastRestocked || m.createdAt)}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[level]}`}>{level}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {medicines.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-sm text-gray-400">No stock items yet</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>

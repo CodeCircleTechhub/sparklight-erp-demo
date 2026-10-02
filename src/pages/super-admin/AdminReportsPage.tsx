@@ -1,19 +1,50 @@
 import { useState } from 'react';
-import { FileBarChart, Users, DollarSign, UserCog, Building2, Pill, FlaskConical, Calendar } from 'lucide-react';
+import { FileBarChart, Users, DollarSign, UserCog, Building2, Pill, FlaskConical, Calendar, Loader2, CheckCircle, AlertCircle, Wallet, TrendingUp, AlertTriangle } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageComponents';
+import { downloadReport } from '../../utils/downloadReport';
 
 const reports = [
-  { title: 'Patient Report', description: 'Patient registration, visits, and demographics', icon: Users, color: 'bg-blue-100 text-blue-600' },
-  { title: 'Revenue Report', description: 'Financial overview, payments, and outstanding bills', icon: DollarSign, color: 'bg-green-100 text-green-600' },
-  { title: 'Staff Report', description: 'Staff attendance, performance, and payroll', icon: UserCog, color: 'bg-purple-100 text-purple-600' },
-  { title: 'Department Report', description: 'Department performance and utilization', icon: Building2, color: 'bg-yellow-100 text-yellow-600' },
-  { title: 'Pharmacy Report', description: 'Medicine inventory and dispensing summary', icon: Pill, color: 'bg-red-100 text-red-600' },
-  { title: 'Laboratory Report', description: 'Test results and laboratory statistics', icon: FlaskConical, color: 'bg-orange-100 text-orange-600' },
+  { type: 'patients', title: 'Patient Report', description: 'Patient registration, visits, and demographics', icon: Users, color: 'bg-blue-100 text-blue-600' },
+  { type: 'revenue', title: 'Revenue Report', description: 'Financial overview, payments, and outstanding bills', icon: DollarSign, color: 'bg-green-100 text-green-600' },
+  { type: 'staff', title: 'Staff Report', description: 'Staff attendance, performance, and payroll', icon: UserCog, color: 'bg-purple-100 text-purple-600' },
+  { type: 'departments', title: 'Department Report', description: 'Department performance and utilization', icon: Building2, color: 'bg-yellow-100 text-yellow-600' },
+  { type: 'pharmacy', title: 'Pharmacy Report', description: 'Medicine inventory and dispensing summary', icon: Pill, color: 'bg-red-100 text-red-600' },
+  { type: 'laboratory', title: 'Laboratory Report', description: 'Test results and laboratory statistics', icon: FlaskConical, color: 'bg-orange-100 text-orange-600' },
+  { type: 'finance-expense', title: 'Expense Report', description: 'Track and analyze all operational expenses', icon: Wallet, color: 'bg-orange-100 text-orange-600' },
+  { type: 'finance-profit', title: 'Profit Analysis', description: 'Net profit margins and financial health overview', icon: TrendingUp, color: 'bg-teal-100 text-teal-600' },
+  { type: 'finance-outstanding', title: 'Outstanding Report', description: 'Unpaid bills and collection status', icon: AlertTriangle, color: 'bg-rose-100 text-rose-600' },
+  { type: 'finance-dept', title: 'Department Report', description: 'Revenue and expenses by department', icon: Building2, color: 'bg-indigo-100 text-indigo-600' },
+  { type: 'finance-monthly', title: 'Monthly Summary', description: 'Month-over-month financial comparison', icon: Calendar, color: 'bg-slate-100 text-slate-600' },
+  { type: 'hr-payroll', title: 'Payroll Report', description: 'Staff salary payments, allowances, and deductions', icon: DollarSign, color: 'bg-fuchsia-100 text-fuchsia-600' },
 ];
 
 export default function AdminReportsPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [busy, setBusy] = useState('');
+  const [notice, setNotice] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  const generate = async (type: string, title: string) => {
+    if (busy) return;
+    if (startDate && endDate && startDate > endDate) {
+      setNotice({ type: 'err', text: 'From date must be on or before To date.' });
+      return;
+    }
+    setBusy(type);
+    setNotice(null);
+    try {
+      await downloadReport(type, {
+        from: startDate || undefined,
+        to: endDate || undefined,
+        fileName: `${title.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`,
+      });
+      setNotice({ type: 'ok', text: `${title} downloaded as PDF.` });
+    } catch (err: any) {
+      setNotice({ type: 'err', text: err.response?.data?.message || 'Failed to generate the report' });
+    } finally {
+      setBusy('');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -47,7 +78,21 @@ export default function AdminReportsPage() {
             </div>
           </div>
         </div>
+        {!startDate && !endDate && (
+          <p className="text-xs text-gray-500 mt-3">No dates selected — reports cover all records.</p>
+        )}
       </div>
+
+      {notice && (
+        <div
+          className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${
+            notice.type === 'ok' ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'
+          }`}
+        >
+          {notice.type === 'ok' ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+          {notice.text}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {reports.map((report) => (
@@ -59,8 +104,13 @@ export default function AdminReportsPage() {
               <h3 className="font-semibold text-gray-900">{report.title}</h3>
             </div>
             <p className="text-sm text-gray-500 mb-4">{report.description}</p>
-            <button className="w-full bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors cursor-pointer">
-              Generate Report
+            <button
+              onClick={() => generate(report.type, report.title)}
+              disabled={!!busy}
+              className="w-full bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              {busy === report.type ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {busy === report.type ? 'Generating…' : 'Generate Report'}
             </button>
           </div>
         ))}

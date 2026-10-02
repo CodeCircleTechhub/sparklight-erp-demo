@@ -1,25 +1,7 @@
+import { useState, useEffect } from 'react';
 import { Clock, UserCheck, AlertCircle, UserX, MoreVertical } from 'lucide-react';
 import { PageHeader, StatusBadge } from '../../components/ui/PageComponents';
-
-const stats = [
-  { label: 'Present', value: '142', icon: UserCheck, color: 'bg-emerald-500' },
-  { label: 'Late', value: '8', icon: AlertCircle, color: 'bg-amber-500' },
-  { label: 'Absent', value: '3', icon: UserX, color: 'bg-red-500' },
-  { label: 'On Leave', value: '3', icon: Clock, color: 'bg-[#3b82f6]' },
-];
-
-const attendance = [
-  { id: 'STF-001', name: 'Dr. James Wilson', department: 'Cardiology', clockIn: '08:00 AM', clockOut: '05:00 PM', hours: '9.0', status: 'Present' },
-  { id: 'STF-002', name: 'Nurse Sarah Miller', department: 'Pediatrics', clockIn: '08:15 AM', clockOut: '04:30 PM', hours: '8.25', status: 'Present' },
-  { id: 'STF-003', name: 'Dr. Emily Chen', department: 'Neurology', clockIn: '08:30 AM', clockOut: '05:15 PM', hours: '8.75', status: 'Present' },
-  { id: 'STF-004', name: 'Mike Brown', department: 'Laboratory', clockIn: '-', clockOut: '-', hours: '-', status: 'On Leave' },
-  { id: 'STF-005', name: 'Dr. Anna Lee', department: 'Orthopedics', clockIn: '07:45 AM', clockOut: '04:45 PM', hours: '9.0', status: 'Present' },
-  { id: 'STF-006', name: 'Tom Davis', department: 'Pharmacy', clockIn: '09:00 AM', clockOut: '05:00 PM', hours: '8.0', status: 'Late' },
-  { id: 'STF-007', name: 'Lisa Johnson', department: 'Administration', clockIn: '08:00 AM', clockOut: '04:00 PM', hours: '8.0', status: 'Present' },
-  { id: 'STF-008', name: 'Robert Taylor', department: 'Cardiology', clockIn: '09:15 AM', clockOut: '-', hours: '-', status: 'Late' },
-  { id: 'STF-009', name: 'Maria Santos', department: 'Radiology', clockIn: '-', clockOut: '-', hours: '-', status: 'Absent' },
-  { id: 'STF-010', name: 'Kevin White', department: 'Finance', clockIn: '08:00 AM', clockOut: '04:30 PM', hours: '8.5', status: 'Present' },
-];
+import api from '../../services/api';
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -32,6 +14,43 @@ const getStatusColor = (status: string) => {
 };
 
 export default function Attendance() {
+  const [attendance, setAttendance] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [present, setPresent] = useState(0);
+  const [absent, setAbsent] = useState(0);
+  const [late, setLate] = useState(0);
+  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetchAttendance();
+  }, [date]);
+
+  const fetchAttendance = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await api.get('/hr/attendance', { params: { date } });
+      setAttendance(res.data.attendance || []);
+      setTotal(res.data.total || 0);
+      setPresent(res.data.present || 0);
+      setAbsent(res.data.absent || 0);
+      setLate(res.data.late || 0);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to fetch attendance');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const stats = [
+    { label: 'Present', value: present, icon: UserCheck, color: 'bg-emerald-500' },
+    { label: 'Late', value: late, icon: AlertCircle, color: 'bg-amber-500' },
+    { label: 'Absent', value: absent, icon: UserX, color: 'bg-red-500' },
+    { label: 'Total', value: total, icon: Clock, color: 'bg-[#3b82f6]' },
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-6 py-6">
@@ -40,7 +59,12 @@ export default function Attendance() {
           <div className="flex items-center gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-              <input type="date" defaultValue="2024-01-15" className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3b82f6] focus:border-transparent" />
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3b82f6] focus:border-transparent"
+              />
             </div>
           </div>
         </div>
@@ -60,31 +84,41 @@ export default function Attendance() {
             );
           })}
         </div>
+        {error && (
+          <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg mb-6 text-sm">{error}</div>
+        )}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  {['Staff ID', 'Name', 'Department', 'Clock In', 'Clock Out', 'Hours', 'Status', ''].map((h) => (
-                    <th key={h} className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-5 py-3">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {attendance.map((a) => (
-                  <tr key={a.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-4 text-sm font-medium text-[#3b82f6]">{a.id}</td>
-                    <td className="px-5 py-4 text-sm text-gray-900">{a.name}</td>
-                    <td className="px-5 py-4 text-sm text-gray-500">{a.department}</td>
-                    <td className="px-5 py-4 text-sm text-gray-500">{a.clockIn}</td>
-                    <td className="px-5 py-4 text-sm text-gray-500">{a.clockOut}</td>
-                    <td className="px-5 py-4 text-sm text-gray-900">{a.hours}</td>
-                    <td className="px-5 py-4"><StatusBadge status={a.status} color={getStatusColor(a.status) as any} /></td>
-                    <td className="px-5 py-4"><button className="text-gray-400 hover:text-gray-600"><MoreVertical className="w-4 h-4" /></button></td>
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#3b82f6]" />
+              </div>
+            ) : attendance.length === 0 ? (
+              <div className="text-center py-12 text-gray-500 text-sm">No attendance records found</div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    {['Staff ID', 'Name', 'Clock In', 'Clock Out', 'Hours', 'Status', ''].map((h) => (
+                      <th key={h} className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-5 py-3">{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {attendance.map((a: any) => (
+                    <tr key={a._id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                      <td className="px-5 py-4 text-sm font-medium text-[#3b82f6]">{a.employee?.staffId || '-'}</td>
+                      <td className="px-5 py-4 text-sm text-gray-900">{a.employee?.fullName || '-'}</td>
+                      <td className="px-5 py-4 text-sm text-gray-500">{a.clockIn || '-'}</td>
+                      <td className="px-5 py-4 text-sm text-gray-500">{a.clockOut || '-'}</td>
+                      <td className="px-5 py-4 text-sm text-gray-900">{a.hours ?? '-'}</td>
+                      <td className="px-5 py-4"><StatusBadge status={a.status} color={getStatusColor(a.status) as any} /></td>
+                      <td className="px-5 py-4"><button className="text-gray-400 hover:text-gray-600"><MoreVertical className="w-4 h-4" /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       </div>

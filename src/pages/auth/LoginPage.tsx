@@ -1,24 +1,12 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, Shield, BarChart3, Users, Building2, ArrowLeft } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Shield, BarChart3, Users, Building2, ArrowLeft, AlertCircle, Loader2, User } from 'lucide-react';
 import Logo from '../../components/logo/Logo';
+import { useAuth } from '../../contexts/AuthContext';
+import { getDashboardRoute } from '../../utils/dashboardRoutes';
 
 type Role = 'admin' | 'manager' | 'staff' | 'patient';
 type StaffRole = 'receptionist' | 'customer-care' | 'nurse' | 'doctor' | 'laboratory' | 'pharmacist' | 'accountant' | 'hr';
-
-const roleRoutes: Record<string, string> = {
-  admin: '/admin/dashboard',
-  manager: '/manager/dashboard',
-  receptionist: '/receptionist/dashboard',
-  'customer-care': '/customer-care/dashboard',
-  nurse: '/nurse/dashboard',
-  doctor: '/doctor/dashboard',
-  laboratory: '/laboratory/dashboard',
-  pharmacist: '/pharmacist/dashboard',
-  accountant: '/accountant/dashboard',
-  hr: '/hr/dashboard',
-  patient: '/patient/dashboard',
-};
 
 const mainRoles: { id: Role; label: string; icon: typeof Shield }[] = [
   { id: 'admin', label: 'Admin', icon: Shield },
@@ -40,31 +28,56 @@ const staffRoles: { id: StaffRole; label: string }[] = [
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [selectedStaffRole, setSelectedStaffRole] = useState<StaffRole | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRole) return;
-    const role = selectedRole === 'staff' && selectedStaffRole ? selectedStaffRole : selectedRole;
-    navigate(roleRoutes[role]);
+
+    setError('');
+    setLoading(true);
+
+    const result = await login(email, password);
+    setLoading(false);
+
+    if (result.success) {
+      const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const userRole = storedUser.role || '';
+      navigate(getDashboardRoute(userRole));
+    } else {
+      setError(result.error || 'Login failed. Please check your credentials.');
+    }
   };
 
   const handleRoleSelect = (role: Role) => {
     setSelectedRole(role);
     setSelectedStaffRole(null);
+    setError('');
+    setEmail('');
+    setPassword('');
   };
 
+  const isStaffLogin = selectedRole === 'staff';
+  const isPatientLogin = selectedRole === 'patient';
   const getPlaceholder = () => {
     if (!selectedRole) return 'Enter your email or staff ID';
     if (selectedRole === 'admin') return 'admin@sparklight.com';
     if (selectedRole === 'manager') return 'manager@sparklight.com';
-    if (selectedRole === 'patient') return 'patient@sparklight.com';
-    return 'staff@sparklight.com';
+    if (selectedRole === 'patient') return 'Patient ID (e.g. PT-001) or email';
+    return 'Staff ID (e.g. S001) or email';
+  };
+  const getLoginHint = () => {
+    if (isStaffLogin) return 'Staff: Use your Staff ID and surname (lowercase) as password. Change password after first login.';
+    if (isPatientLogin) return 'Patients: Use your Patient ID (e.g. PT-001) or email. Default password was sent to your email — change it after first login.';
+    return '';
   };
 
   return (
@@ -127,6 +140,14 @@ export default function LoginPage() {
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Welcome to SparkLight</h2>
           <p className="text-gray-500 mb-8">Select your role and sign in to continue</p>
 
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              {error}
+            </div>
+          )}
+
           {/* Role Selector Grid */}
           <div className="grid grid-cols-2 gap-3 mb-6">
             {mainRoles.map((role) => {
@@ -178,12 +199,16 @@ export default function LoginPage() {
               {/* Email / Staff ID */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  {selectedRole === 'staff' && selectedStaffRole ? 'Staff ID / Email' : 'Email Address'}
+                  {isStaffLogin ? 'Staff ID / Email' : isPatientLogin ? 'Patient ID / Email' : 'Email Address'}
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  {isStaffLogin || isPatientLogin ? (
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  ) : (
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  )}
                   <input
-                    type={selectedRole === 'staff' ? 'text' : 'email'}
+                    type="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder={getPlaceholder()}
@@ -191,6 +216,11 @@ export default function LoginPage() {
                     required
                   />
                 </div>
+                {(isStaffLogin || isPatientLogin) && (
+                  <p className="mt-1.5 text-xs text-amber-600 bg-amber-50 px-3 py-1.5 rounded-md">
+                    {getLoginHint()}
+                  </p>
+                )}
               </div>
 
               {/* Password */}
@@ -202,7 +232,13 @@ export default function LoginPage() {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
+                    placeholder={
+                      isStaffLogin
+                        ? 'Your surname (lowercase)'
+                        : isPatientLogin
+                        ? 'Your default password'
+                        : 'Enter your password'
+                    }
                     className="w-full pl-11 pr-11 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-colors"
                     required
                   />
@@ -235,10 +271,17 @@ export default function LoginPage() {
               {/* Login Button */}
               <button
                 type="submit"
-                disabled={selectedRole === 'staff' && !selectedStaffRole}
-                className="w-full bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-lg transition-colors"
+                disabled={loading}
+                className="w-full bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2"
               >
-                Login
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  'Login'
+                )}
               </button>
             </form>
           )}

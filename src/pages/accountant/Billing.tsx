@@ -1,25 +1,9 @@
-import { DollarSign, Receipt, Clock, AlertTriangle, MoreVertical } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { DollarSign, Receipt, Clock, AlertTriangle, MoreVertical, Loader2, AlertCircle } from 'lucide-react';
 import { PageHeader, StatusBadge } from '../../components/ui/PageComponents';
+import api from '../../services/api';
 
-const stats = [
-  { label: 'Total Bills', value: '₦458,200', icon: DollarSign, color: 'bg-[#3b82f6]' },
-  { label: 'Paid', value: '₦380,000', icon: Receipt, color: 'bg-emerald-500' },
-  { label: 'Pending', value: '₦45,200', icon: Clock, color: 'bg-amber-500' },
-  { label: 'Overdue', value: '₦33,000', icon: AlertTriangle, color: 'bg-red-500' },
-];
-
-const bills = [
-  { id: 'BIL-001', patient: 'John Smith', visit: 'VST-001', amount: 2500, paid: 2500, balance: 0, status: 'Paid' },
-  { id: 'BIL-002', patient: 'Maria Garcia', visit: 'VST-002', amount: 1800, paid: 1000, balance: 800, status: 'Pending' },
-  { id: 'BIL-003', patient: 'Robert Johnson', visit: 'VST-003', amount: 3200, paid: 3200, balance: 0, status: 'Paid' },
-  { id: 'BIL-004', patient: 'Emily Davis', visit: 'VST-004', amount: 950, paid: 0, balance: 950, status: 'Overdue' },
-  { id: 'BIL-005', patient: 'Michael Wilson', visit: 'VST-005', amount: 4500, paid: 4500, balance: 0, status: 'Paid' },
-  { id: 'BIL-006', patient: 'Sarah Brown', visit: 'VST-006', amount: 1200, paid: 600, balance: 600, status: 'Pending' },
-  { id: 'BIL-007', patient: 'David Lee', visit: 'VST-007', amount: 2800, paid: 2800, balance: 0, status: 'Paid' },
-  { id: 'BIL-008', patient: 'Emma Wilson', visit: 'VST-008', amount: 1500, paid: 0, balance: 1500, status: 'Overdue' },
-  { id: 'BIL-009', patient: 'James Taylor', visit: 'VST-009', amount: 3500, paid: 2000, balance: 1500, status: 'Pending' },
-  { id: 'BIL-010', patient: 'Lisa Anderson', visit: 'VST-010', amount: 2200, paid: 2200, balance: 0, status: 'Paid' },
-];
+const money = (n: number) => '₦' + Number(n || 0).toLocaleString();
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -31,17 +15,67 @@ const getStatusColor = (status: string) => {
 };
 
 export default function Billing() {
+  const [summary, setSummary] = useState<any>({});
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const [sumRes, invRes] = await Promise.all([
+          api.get('/billing/summary'),
+          api.get('/billing/invoices'),
+        ]);
+        setSummary(sumRes.data || {});
+        setInvoices(invRes.data.invoices || []);
+      } catch (err: any) {
+        setError(err.response?.data?.message || 'Failed to load billing data');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const stats = [
+    { label: 'Total Bills', value: money(summary.totalBilled), icon: DollarSign, color: 'bg-[#3b82f6]' },
+    { label: 'Paid', value: money(summary.totalPaid), icon: Receipt, color: 'bg-emerald-500' },
+    { label: 'Pending', value: money(summary.totalPending), icon: Clock, color: 'bg-amber-500' },
+    { label: 'Overdue', value: money(summary.totalOverdue), icon: AlertTriangle, color: 'bg-red-500' },
+  ];
+
+  const bills = invoices.map((inv) => {
+    const paid = inv.status === 'Paid' ? inv.totalAmount || 0 : 0;
+    return {
+      id: inv.invoiceId,
+      patient: inv.patientName || '—',
+      visit: inv.type || '—',
+      amount: inv.totalAmount || 0,
+      paid,
+      balance: (inv.totalAmount || 0) - paid,
+      status: inv.status,
+    };
+  });
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-6 py-6">
         <PageHeader title="Billing Management" icon={DollarSign} />
+        {error && (
+          <div className="mb-6 flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {error}
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {stats.map((s) => {
             const Icon = s.icon;
             return (
               <div key={s.label} className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className={`₦{s.color} p-2 rounded-lg`}>
+                  <div className={`${s.color} p-2 rounded-lg`}>
                     <Icon className="w-5 h-5 text-white" />
                   </div>
                   <span className="text-sm text-gray-500">{s.label}</span>
@@ -53,10 +87,16 @@ export default function Billing() {
         </div>
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
           <div className="overflow-x-auto">
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-12 text-sm text-gray-500">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Loading bills...
+              </div>
+            ) : (
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-100">
-                  {['Bill ID', 'Patient', 'Visit', 'Amount', 'Paid', 'Balance', 'Status', ''].map((h) => (
+                  {['Bill ID', 'Patient', 'Type', 'Amount', 'Paid', 'Balance', 'Status', ''].map((h) => (
                     <th key={h} className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-5 py-3">{h}</th>
                   ))}
                 </tr>
@@ -74,8 +114,14 @@ export default function Billing() {
                     <td className="px-5 py-4"><button className="text-gray-400 hover:text-gray-600"><MoreVertical className="w-4 h-4" /></button></td>
                   </tr>
                 ))}
+                {bills.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-sm text-gray-400">No bills found</td>
+                  </tr>
+                )}
               </tbody>
             </table>
+            )}
           </div>
         </div>
       </div>

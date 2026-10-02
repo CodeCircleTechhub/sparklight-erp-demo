@@ -1,30 +1,55 @@
-import { Receipt as ReceiptIcon, Calendar, Clock, MoreVertical } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Receipt as ReceiptIcon, Calendar, Clock, MoreVertical, Loader2, AlertCircle } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageComponents';
+import api from '../../services/api';
 
-const stats = [
-  { label: 'Total', value: '1,050', icon: ReceiptIcon, color: 'bg-[#3b82f6]' },
-  { label: 'This Month', value: '120', icon: Calendar, color: 'bg-emerald-500' },
-  { label: 'Pending', value: '5', icon: Clock, color: 'bg-amber-500' },
-];
-
-const receipts = [
-  { id: 'RCP-001', patient: 'John Smith', invoice: 'INV-001', amount: 2500, method: 'Credit Card', date: '2024-01-15' },
-  { id: 'RCP-002', patient: 'Maria Garcia', invoice: 'INV-002', amount: 1000, method: 'Bank Transfer', date: '2024-01-15' },
-  { id: 'RCP-003', patient: 'Robert Johnson', invoice: 'INV-003', amount: 8500, method: 'Insurance', date: '2024-01-14' },
-  { id: 'RCP-004', patient: 'Emily Davis', invoice: 'INV-004', amount: 950, method: 'Cash', date: '2024-01-14' },
-  { id: 'RCP-005', patient: 'Michael Wilson', invoice: 'INV-005', amount: 4500, method: 'Credit Card', date: '2024-01-13' },
-  { id: 'RCP-006', patient: 'Sarah Brown', invoice: 'INV-006', amount: 600, method: 'Mobile Pay', date: '2024-01-13' },
-  { id: 'RCP-007', patient: 'David Lee', invoice: 'INV-007', amount: 800, method: 'Cash', date: '2024-01-12' },
-  { id: 'RCP-008', patient: 'Emma Wilson', invoice: 'INV-008', amount: 1500, method: 'Bank Transfer', date: '2024-01-12' },
-  { id: 'RCP-009', patient: 'James Taylor', invoice: 'INV-009', amount: 5000, method: 'Insurance', date: '2024-01-11' },
-  { id: 'RCP-010', patient: 'Lisa Anderson', invoice: 'INV-010', amount: 2200, method: 'Credit Card', date: '2024-01-11' },
-];
+const fmtDate = (d?: string | null) => (d ? String(d).slice(0, 10) : '—');
 
 export default function Receipts() {
+  const [payments, setPayments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const { data } = await api.get('/billing/payments');
+        setPayments(data.payments || []);
+      } catch (err: any) {
+        setError(err.response?.data?.message || 'Failed to load receipts');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  // a receipt exists once the payment is settled (not still pending)
+  const receipts = payments.filter((p) => p.status === 'Completed' || p.status === 'Refunded');
+  const now = new Date();
+  const thisMonth = receipts.filter((p) => {
+    const d = new Date(p.date);
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  });
+  const pending = payments.filter((p) => p.status === 'Pending');
+
+  const stats = [
+    { label: 'Total', value: receipts.length.toLocaleString(), icon: ReceiptIcon, color: 'bg-[#3b82f6]' },
+    { label: 'This Month', value: thisMonth.length.toLocaleString(), icon: Calendar, color: 'bg-emerald-500' },
+    { label: 'Pending', value: pending.length.toLocaleString(), icon: Clock, color: 'bg-amber-500' },
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-6 py-6">
         <PageHeader title="Receipts" icon={ReceiptIcon} />
+        {error && (
+          <div className="mb-6 flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {error}
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           {stats.map((s) => {
             const Icon = s.icon;
@@ -43,6 +68,12 @@ export default function Receipts() {
         </div>
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
           <div className="overflow-x-auto">
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-12 text-sm text-gray-500">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Loading receipts...
+              </div>
+            ) : (
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-100">
@@ -53,18 +84,28 @@ export default function Receipts() {
               </thead>
               <tbody>
                 {receipts.map((r) => (
-                  <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-4 text-sm font-medium text-[#3b82f6]">{r.id}</td>
-                    <td className="px-5 py-4 text-sm text-gray-900">{r.patient}</td>
-                    <td className="px-5 py-4 text-sm text-gray-500">{r.invoice}</td>
-                    <td className="px-5 py-4 text-sm font-medium text-gray-900">${r.amount.toLocaleString()}</td>
+                  <tr key={r._id || r.paymentId} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                    <td className="px-5 py-4 text-sm font-medium text-[#3b82f6]">{r.paymentId}</td>
+                    <td className="px-5 py-4 text-sm text-gray-900">
+                      {r.patient
+                        ? [r.patient.firstName, r.patient.surname].filter(Boolean).join(' ') || r.patient.patientId
+                        : r.patientName || '—'}
+                    </td>
+                    <td className="px-5 py-4 text-sm text-gray-500">{r.reference || '—'}</td>
+                    <td className="px-5 py-4 text-sm font-medium text-gray-900">₦{(r.amount || 0).toLocaleString()}</td>
                     <td className="px-5 py-4 text-sm text-gray-500">{r.method}</td>
-                    <td className="px-5 py-4 text-sm text-gray-500">{r.date}</td>
+                    <td className="px-5 py-4 text-sm text-gray-500">{fmtDate(r.date)}</td>
                     <td className="px-5 py-4"><button className="text-gray-400 hover:text-gray-600"><MoreVertical className="w-4 h-4" /></button></td>
                   </tr>
                 ))}
+                {receipts.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-sm text-gray-400">No receipts yet</td>
+                  </tr>
+                )}
               </tbody>
             </table>
+            )}
           </div>
         </div>
       </div>

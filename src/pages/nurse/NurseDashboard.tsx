@@ -1,4 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import api from '../../services/api';
+import ApplyLeaveButton from '../../components/shared/ApplyLeaveButton';
 import {
   Users,
   Clock,
@@ -23,11 +27,11 @@ interface StatCard {
   bgColor: string;
 }
 
-interface Patient {
+interface QueueRow {
   id: string;
   name: string;
   waitingTime: string;
-  status: 'Waiting' | 'Vitals Taken' | 'With Doctor';
+  status: string;
 }
 
 interface Medication {
@@ -45,33 +49,6 @@ interface QuickAction {
   bgColor: string;
 }
 
-const statCards: StatCard[] = [
-  { title: 'Assigned Patients', value: 12, icon: <Users className="w-6 h-6" />, color: 'text-blue-600', bgColor: 'bg-blue-100' },
-  { title: 'Waiting Patients', value: 5, icon: <Clock className="w-6 h-6" />, color: 'text-yellow-600', bgColor: 'bg-yellow-100' },
-  { title: 'Patients to Check', value: 8, icon: <Stethoscope className="w-6 h-6" />, color: 'text-orange-600', bgColor: 'bg-orange-100' },
-  { title: 'Patients in Ward', value: 15, icon: <BedDouble className="w-6 h-6" />, color: 'text-purple-600', bgColor: 'bg-purple-100' },
-  { title: "Today's Vital Signs", value: 22, icon: <Activity className="w-6 h-6" />, color: 'text-green-600', bgColor: 'bg-green-100' },
-  { title: 'Pending Tasks', value: 6, icon: <ClipboardList className="w-6 h-6" />, color: 'text-red-600', bgColor: 'bg-red-100' },
-];
-
-const patientQueue: Patient[] = [
-  { id: '1', name: 'Alice Johnson', waitingTime: '5 min', status: 'Waiting' },
-  { id: '2', name: 'Bob Williams', waitingTime: '12 min', status: 'Vitals Taken' },
-  { id: '3', name: 'Clara Martinez', waitingTime: '3 min', status: 'Waiting' },
-  { id: '4', name: 'David Lee', waitingTime: '8 min', status: 'With Doctor' },
-  { id: '5', name: 'Eva Thompson', waitingTime: '15 min', status: 'Vitals Taken' },
-  { id: '6', name: 'Frank Wilson', waitingTime: '2 min', status: 'Waiting' },
-];
-
-const medicationSchedule: Medication[] = [
-  { id: '1', patientName: 'Alice Johnson', medicine: 'Amoxicillin 500mg', time: '08:00 AM', status: 'Completed' },
-  { id: '2', patientName: 'Bob Williams', medicine: 'Metformin 850mg', time: '09:00 AM', status: 'Completed' },
-  { id: '3', patientName: 'Clara Martinez', medicine: 'Lisinopril 10mg', time: '10:00 AM', status: 'Pending' },
-  { id: '4', patientName: 'David Lee', medicine: 'Omeprazole 20mg', time: '11:00 AM', status: 'Pending' },
-  { id: '5', patientName: 'Eva Thompson', medicine: 'Atorvastatin 40mg', time: '12:00 PM', status: 'Pending' },
-  { id: '6', patientName: 'Frank Wilson', medicine: 'Metoprolol 50mg', time: '01:00 PM', status: 'Pending' },
-];
-
 const quickActions: QuickAction[] = [
   { title: 'Record Vital Signs', icon: <Activity className="w-5 h-5" />, color: 'text-green-600', bgColor: 'bg-green-100' },
   { title: 'View Patient Queue', icon: <Users className="w-5 h-5" />, color: 'text-blue-600', bgColor: 'bg-blue-100' },
@@ -81,8 +58,10 @@ const quickActions: QuickAction[] = [
 
 const queueStatusColors: Record<string, string> = {
   Waiting: 'bg-yellow-100 text-yellow-700',
-  'Vitals Taken': 'bg-blue-100 text-blue-700',
-  'With Doctor': 'bg-green-100 text-green-700',
+  Called: 'bg-purple-100 text-purple-700',
+  'In Consultation': 'bg-blue-100 text-blue-700',
+  Completed: 'bg-green-100 text-green-700',
+  Cancelled: 'bg-gray-100 text-gray-700',
 };
 
 const medStatusColors: Record<string, string> = {
@@ -90,8 +69,125 @@ const medStatusColors: Record<string, string> = {
   Completed: 'bg-green-100 text-green-700',
 };
 
+const quickActionRoutes: Record<string, string> = {
+  'Record Vital Signs': '/nurse/vital-signs',
+  'View Patient Queue': '/nurse/queue',
+  'Nursing Notes': '/nurse/notes',
+  'Ward Overview': '/nurse/ward',
+};
+
+function formatWaitingTime(dateStr: string): string {
+  if (!dateStr) return 'N/A';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins} min`;
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
+
+function formatTime(dateStr: string): string {
+  if (!dateStr) return 'N/A';
+  return new Date(dateStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
 export default function NurseDashboard() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [statCards, setStatCards] = useState<StatCard[]>([]);
+  const [patientQueue, setPatientQueue] = useState<QueueRow[]>([]);
+  const [medicationSchedule, setMedicationSchedule] = useState<Medication[]>([]);
+  const [notificationCount, setNotificationCount] = useState(0);
+
+  const fetchDashboardData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data } = await api.get('/nurse/dashboard');
+      const s = data.stats || {};
+
+      setStatCards([
+        { title: 'My Patients', value: s.myPatients ?? 0, icon: <Users className="w-6 h-6" />, color: 'text-blue-600', bgColor: 'bg-blue-100' },
+        { title: 'Waiting', value: s.waiting ?? 0, icon: <Clock className="w-6 h-6" />, color: 'text-yellow-600', bgColor: 'bg-yellow-100' },
+        { title: 'With Nurse', value: s.withNurse ?? 0, icon: <Stethoscope className="w-6 h-6" />, color: 'text-purple-600', bgColor: 'bg-purple-100' },
+        { title: 'To Administer', value: s.toAdminister ?? 0, icon: <Pill className="w-6 h-6" />, color: 'text-indigo-600', bgColor: 'bg-indigo-100' },
+        { title: 'Vitals Today', value: s.vitalsToday ?? 0, icon: <Activity className="w-6 h-6" />, color: 'text-green-600', bgColor: 'bg-green-100' },
+        { title: 'Admitted', value: s.admitted ?? 0, icon: <BedDouble className="w-6 h-6" />, color: 'text-orange-600', bgColor: 'bg-orange-100' },
+      ]);
+
+      setNotificationCount(s.unreadNotifications ?? 0);
+
+      setPatientQueue(
+        (data.queue || []).slice(0, 8).map((q: any) => ({
+          id: q._id,
+          name: q.patientName || q.patient
+            ? [q.patient?.firstName, q.patient?.surname].filter(Boolean).join(' ') || q.patientName
+            : 'Unknown Patient',
+          waitingTime: formatWaitingTime(q.joinedAt),
+          status: q.status || 'Waiting',
+        }))
+      );
+
+      setMedicationSchedule(
+        (data.pendingMedications || []).slice(0, 6).map((m: any) => ({
+          id: m._id,
+          patientName:
+            [m.patient?.firstName, m.patient?.surname].filter(Boolean).join(' ') ||
+            m.patientName ||
+            'Unknown Patient',
+          medicine: (m.medications || []).map((x: any) => x.name).filter(Boolean).join(', ') || 'Medicine',
+          time: formatTime(m.date || m.createdAt),
+          status: m.administeredAt ? 'Completed' : 'Pending',
+        }))
+      );
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to load dashboard data. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  const filteredQueue = patientQueue.filter((p) =>
+    p.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
+  );
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-sm text-gray-500">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-sm">
+          <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <ClipboardList className="w-6 h-6 text-red-600" />
+          </div>
+          <p className="text-sm text-red-600 font-medium mb-2">Something went wrong</p>
+          <p className="text-xs text-gray-500 mb-4">{error}</p>
+          <button
+            onClick={fetchDashboardData}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -99,25 +195,32 @@ export default function NurseDashboard() {
       <div className="bg-white border-b border-gray-200 px-4 lg:px-8 py-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Welcome, Nurse Sarah</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Welcome, {user?.fullName || 'Nurse'}</h1>
             <p className="text-sm text-gray-500 mt-1">Here's your patient overview for today</p>
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto">
+            <ApplyLeaveButton />
             <div className="relative flex-1 sm:flex-initial">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search patients..."
+                placeholder="Search queue..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full sm:w-64 pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-            <button className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg">
+            <button
+              onClick={() => navigate('/nurse/notifications')}
+              className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+              title="Notifications"
+            >
               <Bell className="w-5 h-5" />
-              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                4
-              </span>
+              {notificationCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {notificationCount}
+                </span>
+              )}
             </button>
           </div>
         </div>
@@ -145,10 +248,13 @@ export default function NurseDashboard() {
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-semibold text-gray-900">Patient Queue</h2>
                 <span className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-full">
-                  {patientQueue.length}
+                  {filteredQueue.length}
                 </span>
               </div>
-              <button className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1">
+              <button
+                onClick={() => navigate('/nurse/queue')}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+              >
                 View All <ChevronRight className="w-4 h-4" />
               </button>
             </div>
@@ -171,37 +277,51 @@ export default function NurseDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {patientQueue.map((patient) => (
-                    <tr key={patient.id} className="hover:bg-gray-50 transition-colors cursor-pointer">
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-xs font-semibold text-blue-700 shrink-0">
-                            {patient.name
-                              .split(' ')
-                              .map((n) => n[0])
-                              .join('')}
-                          </div>
-                          <span className="text-sm font-medium text-gray-900">{patient.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                          <Clock className="w-3.5 h-3.5" />
-                          {patient.waitingTime}
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <span className={`text-[10px] font-medium px-2 py-1 rounded-full ${queueStatusColors[patient.status]}`}>
-                          {patient.status}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <button className="text-xs text-blue-600 hover:text-blue-700 font-medium">
-                          Check In
-                        </button>
+                  {filteredQueue.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-5 py-8 text-center text-sm text-gray-400">
+                        No patients in queue today
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredQueue.map((patient) => (
+                      <tr
+                        key={patient.id}
+                        onClick={() => navigate('/nurse/queue')}
+                        className="hover:bg-gray-50 transition-colors cursor-pointer"
+                      >
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-xs font-semibold text-blue-700 shrink-0">
+                              {patient.name
+                                .split(' ')
+                                .map((n) => n[0])
+                                .join('')}
+                            </div>
+                            <span className="text-sm font-medium text-gray-900">{patient.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                            <Clock className="w-3.5 h-3.5" />
+                            {patient.waitingTime}
+                          </div>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <span
+                            className={`text-[10px] font-medium px-2 py-1 rounded-full ${
+                              queueStatusColors[patient.status] || 'bg-gray-100 text-gray-700'
+                            }`}
+                          >
+                            {patient.status}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <button className="text-xs text-blue-600 hover:text-blue-700 font-medium">Open</button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -209,34 +329,47 @@ export default function NurseDashboard() {
 
           {/* Right Column */}
           <div className="space-y-6">
-            {/* Today's Medication Schedule */}
+            {/* Pending medications to administer */}
             <div className="bg-white rounded-xl border border-gray-200">
               <div className="flex items-center justify-between p-5 border-b border-gray-100">
                 <div className="flex items-center gap-2">
                   <Pill className="w-5 h-5 text-blue-600" />
-                  <h2 className="text-lg font-semibold text-gray-900">Medication Schedule</h2>
+                  <h2 className="text-lg font-semibold text-gray-900">Medication Tasks</h2>
                 </div>
+                <button
+                  onClick={() => navigate('/nurse/medications')}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  View All
+                </button>
               </div>
               <div className="divide-y divide-gray-100">
-                {medicationSchedule.map((med) => (
-                  <div key={med.id} className="flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{med.patientName}</p>
-                      <p className="text-xs text-gray-500">{med.medicine}</p>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <div className="text-right">
+                {medicationSchedule.length === 0 ? (
+                  <div className="px-5 py-8 text-center text-sm text-gray-400">No pending medications</div>
+                ) : (
+                  medicationSchedule.map((med) => (
+                    <div
+                      key={med.id}
+                      className="flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{med.patientName}</p>
+                        <p className="text-xs text-gray-500 truncate">{med.medicine}</p>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
                         <p className="text-xs text-gray-500 flex items-center gap-1">
                           <Timer className="w-3 h-3" />
                           {med.time}
                         </p>
+                        <span
+                          className={`text-[10px] font-medium px-2 py-1 rounded-full ${medStatusColors[med.status]}`}
+                        >
+                          {med.status}
+                        </span>
                       </div>
-                      <span className={`text-[10px] font-medium px-2 py-1 rounded-full ${medStatusColors[med.status]}`}>
-                        {med.status}
-                      </span>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
 
@@ -247,6 +380,7 @@ export default function NurseDashboard() {
                 {quickActions.map((action) => (
                   <button
                     key={action.title}
+                    onClick={() => navigate(quickActionRoutes[action.title] || '/')}
                     className="flex flex-col items-center gap-2 p-4 rounded-xl border border-gray-100 hover:shadow-md hover:border-blue-200 transition-all group"
                   >
                     <div className={`${action.bgColor} ${action.color} p-3 rounded-lg group-hover:scale-110 transition-transform`}>

@@ -1,30 +1,53 @@
-import { Banknote } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Banknote, Loader2 } from 'lucide-react';
+import api from '../../services/api';
 import { PageHeader } from '../../components/ui/PageComponents';
 import StatCard from '../../components/ui/StatCard';
 
-const stats = [
-  { title: 'Total Payroll', value: '₦125,000', icon: Banknote, color: 'blue' as const },
-  { title: 'Processed', value: '142', icon: Banknote, color: 'green' as const },
-  { title: 'Pending', value: '14', icon: Banknote, color: 'yellow' as const },
-  { title: 'This Month', value: '₦125,000', icon: Banknote, color: 'purple' as const },
-];
+interface PayrollRecord {
+  employeeName: string;
+  month: string;
+  year: number;
+  baseSalary: number;
+  allowances: number;
+  deductions: number;
+  netSalary: number;
+  status: string;
+}
 
-const payroll = [
-  { id: 'EMP-001', name: 'Dr. Alan Smith', department: 'Cardiology', basic: 8000, allowances: 2400, deductions: 1200, net: 9200, status: 'Processed' },
-  { id: 'EMP-002', name: 'Dr. Priya Patel', department: 'Orthopedics', basic: 7500, allowances: 2250, deductions: 1100, net: 8650, status: 'Processed' },
-  { id: 'EMP-003', name: 'Dr. Wei Lee', department: 'General', basic: 6500, allowances: 1950, deductions: 950, net: 7500, status: 'Processed' },
-  { id: 'EMP-004', name: 'Nurse Grace Adams', department: 'Pediatrics', basic: 3500, allowances: 1050, deductions: 500, net: 4050, status: 'Processed' },
-  { id: 'EMP-005', name: 'Dr. Lin Chen', department: 'Neurology', basic: 8200, allowances: 2460, deductions: 1230, net: 9430, status: 'Pending' },
-  { id: 'EMP-006', name: 'Dr. Soo Kim', department: 'Dermatology', basic: 7000, allowances: 2100, deductions: 1050, net: 8050, status: 'Processed' },
-  { id: 'EMP-007', name: 'Carlos Garcia', department: 'Laboratory', basic: 4000, allowances: 1200, deductions: 600, net: 4600, status: 'Processed' },
-  { id: 'EMP-008', name: 'Dr. Anna Nguyen', department: 'Ophthalmology', basic: 7800, allowances: 2340, deductions: 1170, net: 8970, status: 'Pending' },
-  { id: 'EMP-009', name: 'Fatima Hassan', department: 'Pharmacy', basic: 4500, allowances: 1350, deductions: 675, net: 5175, status: 'Processed' },
-  { id: 'EMP-010', name: 'James Wilson', department: 'Accounting', basic: 4200, allowances: 1260, deductions: 630, net: 4830, status: 'Processed' },
-];
-
-const formatCurrency = (n: number) => `₦${n.toLocaleString()}`;
+const formatCurrency = (n: number) => `\u20A6${n.toLocaleString()}`;
 
 export default function Payroll() {
+  const [payroll, setPayroll] = useState<PayrollRecord[]>([]);
+  const [stats, setStats] = useState([
+    { title: 'Total Payroll', value: '\u20A60', icon: Banknote, color: 'blue' as const },
+    { title: 'Processed', value: '0', icon: Banknote, color: 'green' as const },
+    { title: 'Paid', value: '0', icon: Banknote, color: 'purple' as const },
+    { title: 'Pending', value: '0', icon: Banknote, color: 'yellow' as const },
+  ]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchPayroll = async () => {
+      try {
+        const { data } = await api.get('/hr/payroll');
+        setPayroll(data.payroll ?? []);
+        const totalNet = (data.payroll ?? []).reduce((sum: number, r: PayrollRecord) => sum + (r.netSalary ?? 0), 0);
+        setStats([
+          { title: 'Total Payroll', value: formatCurrency(totalNet), icon: Banknote, color: 'blue' as const },
+          { title: 'Processed', value: String(data.processed ?? 0), icon: Banknote, color: 'green' as const },
+          { title: 'Paid', value: String(data.paid ?? 0), icon: Banknote, color: 'purple' as const },
+          { title: 'Pending', value: String(data.pending ?? 0), icon: Banknote, color: 'yellow' as const },
+        ]);
+      } catch {
+        console.error('Failed to load payroll data');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPayroll();
+  }, []);
+
   return (
     <div className="space-y-6">
       <PageHeader title="Payroll" icon={Banknote} />
@@ -37,38 +60,49 @@ export default function Payroll() {
 
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left py-3 px-4 font-medium text-gray-500">Staff ID</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-500">Name</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-500">Department</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-500">Basic Salary</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-500">Allowances</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-500">Deductions</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-500">Net Pay</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-500">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payroll.map((row) => (
-                <tr key={row.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                  <td className="py-3 px-4 font-medium text-primary-600 whitespace-nowrap">{row.id}</td>
-                  <td className="py-3 px-4 text-gray-900 whitespace-nowrap">{row.name}</td>
-                  <td className="py-3 px-4 text-gray-700 whitespace-nowrap">{row.department}</td>
-                  <td className="py-3 px-4 text-gray-700 whitespace-nowrap">{formatCurrency(row.basic)}</td>
-                  <td className="py-3 px-4 text-green-600 whitespace-nowrap">{formatCurrency(row.allowances)}</td>
-                  <td className="py-3 px-4 text-red-600 whitespace-nowrap">{formatCurrency(row.deductions)}</td>
-                  <td className="py-3 px-4 font-medium text-gray-900 whitespace-nowrap">{formatCurrency(row.net)}</td>
-                  <td className="py-3 px-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${row.status === 'Processed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                      {row.status}
-                    </span>
-                  </td>
+          {loading ? (
+            <div className="flex items-center justify-center h-48">
+              <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+              <span className="ml-2 text-gray-500">Loading payroll...</span>
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="text-left py-3 px-4 font-medium text-gray-500">Name</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500">Month/Year</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500">Base Salary</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500">Allowances</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500">Deductions</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500">Net Pay</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {payroll.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-gray-400">No payroll records found</td>
+                  </tr>
+                ) : (
+                  payroll.map((row, i) => (
+                    <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                      <td className="py-3 px-4 font-medium text-gray-900 whitespace-nowrap">{row.employeeName}</td>
+                      <td className="py-3 px-4 text-gray-700 whitespace-nowrap">{row.month} {row.year}</td>
+                      <td className="py-3 px-4 text-gray-700 whitespace-nowrap">{formatCurrency(row.baseSalary)}</td>
+                      <td className="py-3 px-4 text-green-600 whitespace-nowrap">{formatCurrency(row.allowances)}</td>
+                      <td className="py-3 px-4 text-red-600 whitespace-nowrap">{formatCurrency(row.deductions)}</td>
+                      <td className="py-3 px-4 font-medium text-gray-900 whitespace-nowrap">{formatCurrency(row.netSalary)}</td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${row.status === 'Paid' ? 'bg-green-100 text-green-700' : row.status === 'Processed' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                          {row.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>
