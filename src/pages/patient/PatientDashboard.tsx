@@ -201,13 +201,6 @@ export default function PatientDashboard() {
             <h1 className="text-2xl font-bold text-gray-900">Welcome back, {user?.fullName || 'Patient'}</h1>
             <p className="text-gray-500 mt-1">Patient ID: {user?.patientId || '—'}</p>
           </div>
-          <Link
-            to="/chat"
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 w-fit"
-          >
-            <MessageSquare className="w-4 h-4 text-blue-500" />
-            Talk to customer care
-          </Link>
         </div>
 
         {showPasswordPrompt && (

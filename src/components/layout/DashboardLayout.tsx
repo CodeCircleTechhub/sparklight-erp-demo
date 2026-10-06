@@ -162,13 +162,15 @@ export default function DashboardLayout({ role }: DashboardLayoutProps) {
           <div className="hidden lg:block" />
 
           <div className="flex items-center gap-4">
-            <Link
-              to="/chat"
-              className="relative rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-primary-600"
-              title="Messages"
-            >
-              <MessageSquare className="h-5 w-5" />
-            </Link>
+            {userRole !== 'patient' && (
+              <Link
+                to="/chat"
+                className="relative rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-primary-600"
+                title="Messages"
+              >
+                <MessageSquare className="h-5 w-5" />
+              </Link>
+            )}
 
             <div ref={notifRef} className="relative">
               <button
@@ -265,14 +267,16 @@ export default function DashboardLayout({ role }: DashboardLayoutProps) {
                       <p className="text-xs text-gray-400 mt-0.5">{user.email}</p>
                     )}
                   </div>
-                  <Link
-                    to="/chat"
-                    onClick={() => setShowDropdown(false)}
-                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    <MessageSquare className="h-4 w-4" />
-                    Messages
-                  </Link>
+                  {userRole !== 'patient' && (
+                    <Link
+                      to="/chat"
+                      onClick={() => setShowDropdown(false)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      Messages
+                    </Link>
+                  )}
                   <button
                     onClick={() => {
                       setShowDropdown(false);

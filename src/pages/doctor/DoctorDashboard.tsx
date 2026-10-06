@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import api from "../../services/api";
 import ApplyLeaveButton from "../../components/shared/ApplyLeaveButton";
+import EmergencyPanel from '../../components/shared/EmergencyPanel';
 import {
   Users,
   Clock,
@@ -15,6 +16,7 @@ import {
   FlaskConical,
   Pill,
   CalendarDays,
+  UserCheck,
 } from "lucide-react";
 
 const quickActions = [
@@ -49,6 +51,7 @@ export default function DoctorDashboard() {
 
   const [stats, setStats] = useState({
     todayPatients: 0,
+    assignedToMe: 0,
     waiting: 0,
     inConsultation: 0,
     completed: 0,
@@ -73,6 +76,7 @@ export default function DoctorDashboard() {
 
         setStats({
           todayPatients: (s.waiting || 0) + (s.inConsultation || 0) + (s.completedToday || 0),
+          assignedToMe: s.assignedToMe || 0,
           waiting: s.waiting || 0,
           inConsultation: s.inConsultation || 0,
           completed: s.completedToday || 0,
@@ -133,6 +137,7 @@ export default function DoctorDashboard() {
   }, []);
 
   const statCards = [
+    { label: "My Assigned Patients", value: stats.assignedToMe, icon: UserCheck, color: "bg-cyan-600" },
     { label: "Today's Patients", value: stats.todayPatients, icon: Users, color: "bg-blue-500" },
     { label: "Appointments", value: stats.appointments, icon: CalendarDays, color: "bg-teal-500" },
     { label: "Waiting", value: stats.waiting, icon: Clock, color: "bg-yellow-500" },
@@ -184,6 +189,8 @@ export default function DoctorDashboard() {
             </div>
           ))}
         </div>
+
+        <EmergencyPanel className="mb-8" />
 
         <div className="grid lg:grid-cols-2 gap-8 mb-8">
           {/* Patient Queue */}

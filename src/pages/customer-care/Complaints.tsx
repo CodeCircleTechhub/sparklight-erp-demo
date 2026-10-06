@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   AlertTriangle, Clock, CheckCircle, Search, Filter, AlertCircle,
-  Plus, Loader2, Pencil, Trash2, X, MessageSquare,
+  Plus, Loader2, Pencil, Trash2, X,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../components/ui/PageComponents';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -26,8 +25,7 @@ const categories = ['Service', 'Medical', 'Staff', 'Billing', 'Facilities', 'Wai
 
 export default function Complaints() {
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const [complaints, setComplaints] = useState<any[]>([]);
+    const [complaints, setComplaints] = useState<any[]>([]);
   const [stats, setStats] = useState({ total: 0, pending: 0, investigating: 0, resolved: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -302,15 +300,6 @@ export default function Complaints() {
                               <option key={s} value={s}>{s}</option>
                             ))}
                           </select>
-                          {cmp.patient?._id && (
-                            <button
-                              onClick={() => navigate(`/chat?patient=${cmp.patient._id}`)}
-                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                              title={`Chat with ${cmp.patientName}`}
-                            >
-                              <MessageSquare className="w-4 h-4" />
-                            </button>
-                          )}
                           <button
                             onClick={() => openEdit(cmp)}
                             className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"

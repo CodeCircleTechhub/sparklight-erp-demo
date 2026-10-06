@@ -24,7 +24,6 @@ const statusColors: Record<string, string> = {
 const nextAction: Record<string, { label: string; to: string }> = {
   Waiting: { label: 'Call', to: 'Called' },
   Called: { label: 'Start', to: 'In Consultation' },
-  'In Consultation': { label: 'Complete', to: 'Completed' },
 };
 
 const waitLabel = (mins: number) => {
@@ -107,12 +106,29 @@ export default function PatientQueue() {
     }
   };
 
+  const attend = async (entry: any) => {
+    setBusy(String(entry._id));
+    setError('');
+    try {
+      await api.put(`/nurse/queue/${entry._id}`, { status: 'Completed' });
+      await fetchQueue();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Could not update the queue');
+    } finally {
+      setBusy('');
+    }
+  };
+
   const stats = [
     { label: 'In Queue', value: counts.inQueue, icon: ListOrdered, color: 'text-blue-600', bg: 'bg-blue-100' },
     { label: 'Waiting', value: counts.waiting, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-100' },
     { label: 'With Nurse', value: counts.withNurse, icon: UserCheck, color: 'text-purple-600', bg: 'bg-purple-100' },
     { label: 'Completed Today', value: counts.completed, icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-100' },
   ];
+
+  const active = queue.filter(
+    (q) => q.status === 'Waiting' || q.status === 'Called' || q.status === 'In Consultation',
+  );
 
   return (
     <div className="space-y-6">
@@ -169,11 +185,15 @@ export default function PatientQueue() {
           <div className="flex items-center justify-center py-12 text-sm text-gray-500">
             <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading queue...
           </div>
-        ) : queue.length === 0 ? (
-          <p className="py-12 text-center text-sm text-gray-500">No patients in the queue today.</p>
+        ) : active.length === 0 ? (
+          <p className="py-12 text-center text-sm text-gray-500">
+            {queue.length > 0
+              ? 'All patients in today\u2019s queue have been attended.'
+              : 'No patients in the queue today.'}
+          </p>
         ) : (
           <div className="divide-y divide-gray-200">
-            {queue.map((item, idx) => (
+            {active.map((item, idx) => (
               <div
                 key={item._id}
                 className={`p-4 hover:bg-gray-50 ${item.status === 'In Consultation' ? 'bg-blue-50/30' : ''}`}
@@ -220,6 +240,19 @@ export default function PatientQueue() {
                         {nextAction[item.status].label}
                       </button>
                     )}
+                    <button
+                      onClick={() => attend(item)}
+                      disabled={busy === String(item._id) || deletingId === String(item._id)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 disabled:opacity-50"
+                      title="Mark as attended and remove from the queue"
+                    >
+                      {busy === String(item._id) ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <CheckCircle className="w-4 h-4" />
+                      )}
+                      Attended
+                    </button>
                     <button
                       onClick={() => removeEntry(item)}
                       disabled={deletingId === String(item._id) || busy === String(item._id)}

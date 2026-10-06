@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   Send, ArrowLeft, Search, Loader2, AlertCircle, MessageSquare, Plus, Users,
-  Lock, LockOpen, X, UserPlus, Building2, ChevronLeft,
+  Lock, LockOpen, X, UserPlus, ChevronLeft,
 } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -42,11 +42,8 @@ interface Thread {
   patient?: any;
 }
 
-type StaffTab = 'all' | 'staff' | 'patients';
-
 export default function ChatPage() {
-  const { user } = useAuth();
-  const [threads, setThreads] = useState<Thread[]>([]);
+  const { user } = useAuth();  const [threads, setThreads] = useState<Thread[]>([]);
   const [selected, setSelected] = useState<Thread | null>(null);
   const [messages, setMessages] = useState<ThreadMsg[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -55,14 +52,11 @@ export default function ChatPage() {
   const [msgLoading, setMsgLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  const [tab, setTab] = useState<StaffTab>('all');
 
   // new-chat modal
   const [showNew, setShowNew] = useState(false);
-  const [newTab, setNewTab] = useState<'staff' | 'patients' | 'group'>('staff');
+  const [newTab, setNewTab] = useState<'staff' | 'group'>('staff');
   const [staffList, setStaffList] = useState<any[]>([]);
-  const [patientList, setPatientList] = useState<any[]>([]);
-  const [agentList, setAgentList] = useState<any[]>([]);
   const [newSearch, setNewSearch] = useState('');
   const [newLoading, setNewLoading] = useState(false);
   const [creating, setCreating] = useState('');
@@ -224,19 +218,9 @@ export default function ChatPage() {
     setNewLoading(true);
     setError('');
     try {
-      if (isPatient) {
-        const { data } = await api.get('/chat/agents');
-        setAgentList(data.agents || []);
-        setNewTab('staff');
-      } else {
-        const [staffRes, patientRes] = await Promise.all([
-          api.get('/chat/staff'),
-          api.get('/chat/contacts'),
-        ]);
-        setStaffList(staffRes.data.staff || []);
-        setPatientList(patientRes.data.patients || []);
-        setNewTab('staff');
-      }
+      const staffRes = await api.get('/chat/staff');
+      setStaffList(staffRes.data.staff || []);
+      setNewTab('staff');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to load contacts');
     } finally {
@@ -259,30 +243,6 @@ export default function ChatPage() {
     }
   };
 
-  // deep link: /chat?patient=<patientDocId> (used by customer care "Chat" buttons)
-  const [searchParams, setSearchParams] = useSearchParams();
-  const deepPatient = searchParams.get('patient');
-  const deepHandled = useRef(false);
-
-  useEffect(() => {
-    if (!deepPatient || isPatient || deepHandled.current) return;
-    deepHandled.current = true;
-    setSearchParams({}, { replace: true });
-    (async () => {
-      setCreating(deepPatient);
-      try {
-        const { data } = await api.post('/chat/threads', { patientId: deepPatient });
-        await fetchThreads();
-        if (data.thread) await openThread(data.thread);
-      } catch (err: any) {
-        setError(err.response?.data?.message || 'Failed to open conversation');
-      } finally {
-        setCreating('');
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deepPatient, isPatient]);
-
   const createGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!groupForm.name.trim()) return;
@@ -296,34 +256,42 @@ export default function ChatPage() {
   // ---------------- labels ----------------
   const displayName = (t: Thread) => {
     if (t.type === 'group') return t.groupName || t.title || 'Group chat';
-    if (t.type === 'direct') return t.title || 'Staff chat';
-    if (isPatient) return t.staffName || 'Hospital Support';
-    return t.patientName || t.title || 'Patient';
+    return t.title || 'Staff chat';
   };
   const displayRole = (t: Thread) => {
     if (t.type === 'group') return t.subtitle || 'Group';
-    if (t.type === 'direct') return t.subtitle || 'Staff';
-    if (isPatient) return t.staffRole || 'Customer Care';
-    return 'Patient';
+    return t.subtitle || 'Staff';
   };
   const unreadOf = (t: Thread) => {
     if (typeof t.myUnread === 'number') return t.myUnread;
-    return isPatient ? t.patientUnread || 0 : t.staffUnread || 0;
+    return t.staffUnread || 0;
   };
   const initials = (name: string) =>
     (name || '?').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
 
-  const visibleThreads = threads.filter((t) => {
-    if (isPatient) return true;
-    if (tab === 'all') return true;
-    if (tab === 'staff') return t.type === 'direct' || t.type === 'group';
-    return t.type !== 'direct' && t.type !== 'group';
-  });
-
-  const patientNameOf = (p: any) =>
-    [p.firstName, p.middleName, p.surname].filter(Boolean).join(' ').trim() || p.patientId || 'Patient';
+  // chat is intra-staff only: every conversation is a direct or group thread
+  const visibleThreads = threads.filter((t) => t.type === 'direct' || t.type === 'group');
 
   const inputClass = 'w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500';
+
+  // patients are excluded from chat: messaging is intra-staff only
+  if (isPatient) {
+    return (
+      <div className="flex h-screen bg-gray-100 items-center justify-center p-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-8 max-w-md text-center space-y-3">
+          <MessageSquare className="w-10 h-10 text-gray-300 mx-auto" />
+          <h1 className="text-lg font-semibold text-gray-900">Staff messaging</h1>
+          <p className="text-sm text-gray-500">
+            Chat is reserved for hospital staff — doctor to nurse, nurse to lab and so on. Patients can reach the
+            hospital through the customer care desk.
+          </p>
+          <Link to={backTo} className="inline-flex items-center gap-2 text-sm text-blue-600 hover:underline">
+            <ArrowLeft className="w-4 h-4" /> Back to my dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -339,29 +307,11 @@ export default function ChatPage() {
             <button
               onClick={openNew}
               className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-500 text-white rounded-lg text-xs font-medium hover:bg-blue-600"
-              title={isPatient ? 'Chat with customer care' : 'Start a conversation'}
+              title="Start a conversation"
             >
               <Plus className="w-4 h-4" /> New
             </button>
           </div>
-
-          {!isPatient && (
-            <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-3">
-              {([['all', 'All'], ['staff', 'Staff'], ['patients', 'Patients']] as [StaffTab, string][]).map(
-                ([key, label]) => (
-                  <button
-                    key={key}
-                    onClick={() => setTab(key)}
-                    className={`flex-1 px-2 py-1 rounded-md text-xs font-medium ${
-                      tab === key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                )
-              )}
-            </div>
-          )}
 
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -385,7 +335,7 @@ export default function ChatPage() {
               <MessageSquare className="w-8 h-8 text-gray-300 mb-2" />
               <p className="text-sm text-gray-400">No conversations yet</p>
               <button onClick={openNew} className="text-xs text-blue-600 mt-2 hover:underline">
-                {isPatient ? 'Chat with customer care' : 'Start a conversation'}
+                Start a conversation
               </button>
             </div>
           ) : (
@@ -571,7 +521,7 @@ export default function ChatPage() {
             className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium hover:bg-blue-600"
           >
             <UserPlus className="w-4 h-4" />
-            {isPatient ? 'Chat with customer care' : 'New conversation'}
+            New conversation
           </button>
         </div>
       )}
@@ -584,9 +534,7 @@ export default function ChatPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900">
-                {isPatient ? 'Chat with Customer Care' : 'New Conversation'}
-              </h2>
+              <h2 className="text-xl font-bold text-gray-900">New Conversation</h2>
               <button onClick={() => setShowNew(false)} className="p-2 hover:bg-gray-100 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
@@ -595,40 +543,28 @@ export default function ChatPage() {
             <div className="p-6 space-y-4">
               {error && <p className="text-sm text-red-600">{error}</p>}
 
-              {!isPatient && (
-                <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+              <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setNewTab('staff')}
+                  className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium ${newTab === 'staff' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600'}`}
+                >
+                  <span className="flex items-center justify-center gap-1.5"><Users className="w-4 h-4" /> Staff</span>
+                </button>
+                {user?.role === 'super-admin' && (
                   <button
-                    onClick={() => setNewTab('staff')}
-                    className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium ${newTab === 'staff' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600'}`}
+                    onClick={() => setNewTab('group')}
+                    className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium ${newTab === 'group' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600'}`}
                   >
-                    <span className="flex items-center justify-center gap-1.5"><Users className="w-4 h-4" /> Staff</span>
+                    <span className="flex items-center justify-center gap-1.5"><Plus className="w-4 h-4" /> Group</span>
                   </button>
-                  <button
-                    onClick={() => setNewTab('patients')}
-                    className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium ${newTab === 'patients' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600'}`}
-                  >
-                    <span className="flex items-center justify-center gap-1.5"><Building2 className="w-4 h-4" /> Patient</span>
-                  </button>
-                  {user?.role === 'super-admin' && (
-                    <button
-                      onClick={() => setNewTab('group')}
-                      className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium ${newTab === 'group' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600'}`}
-                    >
-                      <span className="flex items-center justify-center gap-1.5"><Plus className="w-4 h-4" /> Group</span>
-                    </button>
-                  )}
-                </div>
-              )}
+                )}
+              </div>
 
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
-                  placeholder={
-                    isPatient ? 'Search customer care agents...'
-                      : newTab === 'patients' ? 'Search patients...'
-                        : 'Search staff...'
-                  }
+                  placeholder="Search staff..."
                   value={newSearch}
                   onChange={(e) => setNewSearch(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
@@ -638,36 +574,6 @@ export default function ChatPage() {
               {newLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
-                </div>
-              ) : isPatient ? (
-                <div className="space-y-1 max-h-72 overflow-y-auto">
-                  {agentList.length > 1 && (
-                    <p className="text-xs text-gray-500 mb-2">
-                      Choose which customer care agent you would like to talk to ({agentList.length} available).
-                    </p>
-                  )}
-                  {agentList.length === 0 && (
-                    <p className="text-sm text-gray-400 py-4 text-center">No customer care agents available yet.</p>
-                  )}
-                  {agentList
-                    .filter((a) => (a.fullName || '').toLowerCase().includes(newSearch.toLowerCase()))
-                    .map((a) => (
-                      <button
-                        key={a._id}
-                        onClick={() => startThread({ type: 'patient', staffId: a._id }, a._id)}
-                        disabled={creating === a._id}
-                        className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 border border-gray-100 text-left disabled:opacity-60"
-                      >
-                        <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-medium">
-                          {initials(a.fullName || 'CC')}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{a.fullName}</p>
-                          <p className="text-xs text-gray-500 capitalize">{String(a.role || '').replace(/-/g, ' ')}</p>
-                        </div>
-                        {creating === a._id && <Loader2 className="w-4 h-4 animate-spin text-blue-500" />}
-                      </button>
-                    ))}
                 </div>
               ) : newTab === 'group' ? (
                 <form onSubmit={createGroup} className="space-y-4">
@@ -706,7 +612,7 @@ export default function ChatPage() {
                     Create Group Chat
                   </button>
                 </form>
-              ) : newTab === 'staff' ? (
+              ) : (
                 <div className="space-y-1 max-h-72 overflow-y-auto">
                   {staffList
                     .filter((s) =>
@@ -732,30 +638,6 @@ export default function ChatPage() {
                           </p>
                         </div>
                         {creating === s._id && <Loader2 className="w-4 h-4 animate-spin text-blue-500" />}
-                      </button>
-                    ))}
-                </div>
-              ) : (
-                <div className="space-y-1 max-h-72 overflow-y-auto">
-                  {patientList
-                    .filter((p) =>
-                      `${p.firstName} ${p.surname} ${p.patientId}`.toLowerCase().includes(newSearch.toLowerCase())
-                    )
-                    .map((p) => (
-                      <button
-                        key={p._id}
-                        onClick={() => startThread({ patientId: p._id }, p._id)}
-                        disabled={creating === p._id}
-                        className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 border border-gray-100 text-left disabled:opacity-60"
-                      >
-                        <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-medium">
-                          {initials(patientNameOf(p))}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{patientNameOf(p)}</p>
-                          <p className="text-xs text-gray-500">{p.patientId}</p>
-                        </div>
-                        {creating === p._id && <Loader2 className="w-4 h-4 animate-spin text-blue-500" />}
                       </button>
                     ))}
                 </div>

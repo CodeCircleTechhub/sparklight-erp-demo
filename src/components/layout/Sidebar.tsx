@@ -27,6 +27,7 @@ import {
   MessageSquare,
   Activity,
   BedDouble,
+  Heart,
   Building,
   Scan,
   CalendarCheck,
@@ -214,7 +215,8 @@ const navConfig: Record<UserRole, NavItem[]> = {
   'senior-customer-care': frontDeskNav,
   nurse: [
     { label: 'Dashboard', to: '/nurse/dashboard', icon: LayoutDashboard },
-    { label: 'My Patients', to: '/nurse/patients', icon: Users },
+    { label: 'My Patients', to: '/nurse/my-patients', icon: Heart },
+    { label: 'All Patients', to: '/nurse/patients', icon: Users },
     { label: 'Patient Queue', to: '/nurse/queue', icon: ListOrdered },
     { label: 'Vital Signs', to: '/nurse/vital-signs', icon: Activity },
     { label: 'Nursing Notes', to: '/nurse/notes', icon: FileText },
@@ -229,7 +231,8 @@ const navConfig: Record<UserRole, NavItem[]> = {
   ],
   doctor: [
     { label: 'Dashboard', to: '/doctor/dashboard', icon: LayoutDashboard },
-    { label: 'My Patients', to: '/doctor/patients', icon: Users },
+    { label: 'My Patients', to: '/doctor/my-patients', icon: User },
+    { label: 'All Patients', to: '/doctor/patients', icon: Users },
     { label: 'Patient Queue', to: '/doctor/queue', icon: ListOrdered },
     { label: 'Consultations', to: '/doctor/consultations', icon: Stethoscope },
     { label: 'Medical Records', to: '/doctor/records', icon: FileText },
@@ -320,7 +323,6 @@ const navConfig: Record<UserRole, NavItem[]> = {
     { label: 'My Cases', to: '/patient/cases', icon: ClipboardList },
     { label: 'Notifications', to: '/patient/notifications', icon: Bell },
     { label: 'Change Password', to: '/patient/change-password', icon: KeyRound },
-    { label: 'Chat', to: '/chat', icon: MessageSquare },
   ],
 };
 

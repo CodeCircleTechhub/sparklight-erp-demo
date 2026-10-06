@@ -28,6 +28,12 @@ const allocStatusColors: Record<string, string> = {
   Rejected: 'bg-red-100 text-red-800',
 };
 
+const reqStatusColors: Record<string, string> = {
+  Pending: 'bg-amber-100 text-amber-800',
+  Approved: 'bg-green-100 text-green-800',
+  Rejected: 'bg-red-100 text-red-800',
+};
+
 const roomTypes = ['General', 'Private', 'ICU', 'Maternity', 'Isolation', 'Pediatric'];
 
 function BedBar({ total, occupied, reserved, maintenance }: { total: number; occupied: number; reserved: number; maintenance: number }) {
@@ -56,6 +62,7 @@ export default function WardAllocation() {
   const [wards, setWards] = useState<any[]>([]);
   const [rooms, setRooms] = useState<any[]>([]);
   const [admissions, setAdmissions] = useState<any[]>([]);
+  const [bedRequests, setBedRequests] = useState<any[]>([]);
   const [stats, setStats] = useState<any>({});
   const [, setWardTotals] = useState<any>({});
   const [roomTotals, setRoomTotals] = useState<any>({});
@@ -94,11 +101,12 @@ export default function WardAllocation() {
       const params: any = { limit: 200 };
       if (q) params.search = q;
       if (st) params.status = st;
-      const [wardRes, roomRes, admRes, statsRes] = await Promise.all([
+      const [wardRes, roomRes, admRes, statsRes, bedReqRes] = await Promise.all([
         api.get('/admissions/wards'),
         api.get('/admissions/rooms'),
         api.get('/admissions', { params }),
         api.get('/admissions/stats'),
+        api.get('/admissions/requests').catch(() => ({ data: { items: [] } })),
       ]);
       setWards(wardRes.data.items || []);
       setWardTotals(wardRes.data.totals || {});
@@ -112,6 +120,7 @@ export default function WardAllocation() {
         total: roomRes.data.total || 0,
       });
       setAdmissions(admRes.data.items || []);
+      setBedRequests(bedReqRes.data.items || []);
       setStats(statsRes.data || {});
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to load ward data');
@@ -295,6 +304,35 @@ export default function WardAllocation() {
     }
   };
 
+  // ---------- Bed change requests ----------
+  const approveBedRequest = async (id: string) => {
+    setActionId(id);
+    setError('');
+    try {
+      await api.post(`/admissions/requests/${id}/approve`, {});
+      await fetchData(search.trim() || undefined, statusFilter || undefined);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to approve bed request');
+    } finally {
+      setActionId('');
+    }
+  };
+
+  const rejectBedRequest = async (id: string) => {
+    const reason = window.prompt('Reason for rejecting this bed change request?');
+    if (reason === null) return;
+    setActionId(id);
+    setError('');
+    try {
+      await api.post(`/admissions/requests/${id}/reject`, { reason: reason || 'Rejected by manager' });
+      await fetchData(search.trim() || undefined, statusFilter || undefined);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to reject bed request');
+    } finally {
+      setActionId('');
+    }
+  };
+
   // ---------- Transfer ----------
   const openTransfer = (row: any) => {
     setFormError('');
@@ -346,6 +384,85 @@ export default function WardAllocation() {
   };
 
   const pending = admissions.filter((a) => a.allocationStatus === 'Pending Approval' && a.status !== 'Discharged');
+  const pendingBedReqs = bedRequests.filter((r) => r.status === 'Pending');
+  const visibleBedRequests = canManage
+    ? bedRequests
+    : bedRequests.filter((r) => String(r.requestedBy || '') === String((user as any)?._id || ''));
+
+  const bedRequestsTable = (items: any[], withActions: boolean) => (
+    <div className="overflow-x-auto">
+      <table className="w-full">
+        <thead>
+          <tr className="bg-gray-50">
+            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Request</th>
+            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Patient</th>
+            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">From</th>
+            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">To</th>
+            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Reason</th>
+            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Requested By</th>
+            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
+            {withActions && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Actions</th>}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-200">
+          {items.map((row) => {
+            const busy = actionId === row._id;
+            const patientName = row.patient
+              ? [row.patient.firstName, row.patient.surname].filter(Boolean).join(' ')
+              : row.patientName;
+            const from = `${row.fromWard || '-'}${row.fromRoomNumber ? ` / ${row.fromRoomNumber}` : ''}${row.fromBed ? ` / ${row.fromBed}` : ''}`;
+            const to = `${row.toWard || row.toRoom?.ward || '-'}${
+              row.toRoomNumber ? ` / ${row.toRoomNumber}` : row.toRoom ? ` / ${row.toRoom.roomNumber}` : ''
+            }${row.toBed ? ` / ${row.toBed}` : ''}`;
+            return (
+              <tr key={row._id} className="hover:bg-gray-50">
+                <td className="px-4 py-3 text-sm font-medium text-blue-600">{row.requestId}</td>
+                <td className="px-4 py-3 text-sm text-gray-900">{patientName || '-'}</td>
+                <td className="px-4 py-3 text-sm text-gray-600">{from}</td>
+                <td className="px-4 py-3 text-sm text-gray-600">{to}</td>
+                <td className="px-4 py-3 text-sm text-gray-600">{row.reason || '-'}</td>
+                <td className="px-4 py-3 text-sm text-gray-600">
+                  {row.requestedByName || '-'}
+                  {row.createdAt ? (
+                    <div className="text-xs text-gray-400">{new Date(row.createdAt).toLocaleString()}</div>
+                  ) : null}
+                </td>
+                <td className="px-4 py-3">
+                  <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${reqStatusColors[row.status] || 'bg-gray-100 text-gray-700'}`}>
+                    {row.status}
+                  </span>
+                </td>
+                {withActions && (
+                  <td className="px-4 py-3">
+                    {row.status === 'Pending' ? (
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => approveBedRequest(row._id)}
+                          disabled={busy}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs font-medium hover:bg-green-600 disabled:opacity-50"
+                        >
+                          <CheckCircle className="w-3.5 h-3.5" /> Approve
+                        </button>
+                        <button
+                          onClick={() => rejectBedRequest(row._id)}
+                          disabled={busy}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-medium hover:bg-red-600 disabled:opacity-50"
+                        >
+                          <X className="w-3.5 h-3.5" /> Reject
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-500">{row.decidedByName || '-'}</span>
+                    )}
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 
   const statCards = [
     { label: 'Wards', value: stats.wards ?? wards.length, icon: Building2, color: 'text-blue-600', bg: 'bg-blue-100' },
@@ -357,7 +474,7 @@ export default function WardAllocation() {
     { label: 'Maintenance', value: stats.maintenance ?? roomTotals.maintenance ?? 0, icon: Wrench, color: 'text-gray-600', bg: 'bg-gray-100' },
     { label: 'Admitted', value: stats.admitted || 0, icon: BedDouble, color: 'text-teal-600', bg: 'bg-teal-100' },
     ...(canManage
-      ? [{ label: 'Pending Approvals', value: stats.pendingApprovals ?? pending.length, icon: ShieldCheck, color: 'text-orange-600', bg: 'bg-orange-100' }]
+      ? [{ label: 'Pending Approvals', value: (stats.pendingApprovals ?? pending.length) + pendingBedReqs.length, icon: ShieldCheck, color: 'text-orange-600', bg: 'bg-orange-100' }]
       : []),
   ];
 
@@ -365,7 +482,7 @@ export default function WardAllocation() {
     { key: 'wards', label: 'Wards' },
     { key: 'rooms', label: 'Rooms & Beds' },
     { key: 'admissions', label: 'Admissions' },
-    ...(canManage ? [{ key: 'approvals' as Tab, label: 'Approvals', badge: pending.length }] : []),
+    ...(canManage ? [{ key: 'approvals' as Tab, label: 'Approvals', badge: pending.length + pendingBedReqs.length }] : []),
   ];
 
   const inputClass = 'w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500';
@@ -614,70 +731,91 @@ export default function WardAllocation() {
               </div>
             )
           ) : tab === 'approvals' ? (
-            pending.length === 0 ? (
-              <p className="text-center text-gray-400 py-10 text-sm">No pending allocation requests</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Admission</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Patient</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Requested By</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Ward / Room</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Doctor</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Requested</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {pending.map((row) => {
-                      const busy = actionId === row._id;
-                      return (
-                        <tr key={row._id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-sm font-medium text-blue-600">{row.admissionId}</td>
-                          <td className="px-4 py-3 text-sm text-gray-900">{row.patientName}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{row.requestedByName || '—'}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">
-                            {row.ward || '—'} {row.roomNumber ? `· ${row.roomNumber}` : ''}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{row.doctorName || '—'}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">
-                            {row.createdAt ? new Date(row.createdAt).toLocaleString() : '—'}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex gap-1.5">
-                              <button
-                                onClick={() => approve(row._id)}
-                                disabled={busy}
-                                className="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs font-medium hover:bg-green-600 disabled:opacity-50"
-                              >
-                                <CheckCircle className="w-3.5 h-3.5" /> Approve
-                              </button>
-                              <button
-                                onClick={() => reject(row._id)}
-                                disabled={busy}
-                                className="flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-medium hover:bg-red-600 disabled:opacity-50"
-                              >
-                                <X className="w-3.5 h-3.5" /> Reject
-                              </button>
-                              <button
-                                onClick={() => openDetail(row)}
-                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"
-                                title="View"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
+            <div className="space-y-8">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Bed allocation requests</h3>
+                {pending.length === 0 ? (
+                  <p className="text-center text-gray-400 py-8 text-sm">No pending allocation requests</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Admission</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Patient</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Requested By</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Ward / Room</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Doctor</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Requested</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Actions</th>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {pending.map((row) => {
+                          const busy = actionId === row._id;
+                          return (
+                            <tr key={row._id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 text-sm font-medium text-blue-600">{row.admissionId}</td>
+                              <td className="px-4 py-3 text-sm text-gray-900">{row.patientName}</td>
+                              <td className="px-4 py-3 text-sm text-gray-600">{row.requestedByName || '-'}</td>
+                              <td className="px-4 py-3 text-sm text-gray-600">
+                                {row.ward || '-'} {row.roomNumber ? ` / ${row.roomNumber}` : ''}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-600">{row.doctorName || '-'}</td>
+                              <td className="px-4 py-3 text-sm text-gray-600">
+                                {row.createdAt ? new Date(row.createdAt).toLocaleString() : '-'}
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex gap-1.5">
+                                  <button
+                                    onClick={() => approve(row._id)}
+                                    disabled={busy}
+                                    className="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs font-medium hover:bg-green-600 disabled:opacity-50"
+                                  >
+                                    <CheckCircle className="w-3.5 h-3.5" /> Approve
+                                  </button>
+                                  <button
+                                    onClick={() => reject(row._id)}
+                                    disabled={busy}
+                                    className="flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-medium hover:bg-red-600 disabled:opacity-50"
+                                  >
+                                    <X className="w-3.5 h-3.5" /> Reject
+                                  </button>
+                                  <button
+                                    onClick={() => openDetail(row)}
+                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"
+                                    title="View"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-            )
-          ) : admissions.length === 0 ? (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Bed change requests</h3>
+                {bedRequests.length === 0 ? (
+                  <p className="text-center text-gray-400 py-8 text-sm">No bed change requests</p>
+                ) : (
+                  bedRequestsTable(bedRequests, true)
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              {visibleBedRequests.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">My bed change requests</h3>
+                  {bedRequestsTable(visibleBedRequests, false)}
+                </div>
+              )}
+              {admissions.length === 0 ? (
             <p className="text-center text-gray-400 py-10 text-sm">No admissions found</p>
           ) : (
             <div className="overflow-x-auto">
@@ -755,6 +893,8 @@ export default function WardAllocation() {
                 </tbody>
               </table>
             </div>
+          )}
+            </>
           )}
         </div>
       </div>

@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Users, AlertTriangle, Heart, Search, Loader2, AlertCircle, BedDouble } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Users, AlertTriangle, Heart, Search, Loader2, AlertCircle, BedDouble, Eye } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageComponents';
 import { billingBadge } from '../../utils/billingStatus';
+import PatientHistoryModal from '../../components/shared/PatientHistoryModal';
 import api from '../../services/api';
 
 const statusColors: Record<string, string> = {
@@ -21,19 +23,26 @@ const fmtWhen = (iso?: string | null) => {
 };
 
 export default function MyPatients() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  // /nurse/my-patients = only my admissions; /nurse/patients = every admitted patient
+  const mine = location.pathname.endsWith('/my-patients');
   const [patients, setPatients] = useState<any[]>([]);
   const [stats, setStats] = useState<any>({});
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [viewing, setViewing] = useState<string | null>(null);
 
   const fetchPatients = useCallback(async (q: string) => {
     setLoading(true);
     setError('');
     try {
       const [patRes, billRes] = await Promise.all([
-        api.get('/nurse/patients', { params: q ? { search: q } : {} }),
+        api.get('/nurse/patients', {
+          params: { ...(mine ? {} : { all: 1 }), ...(q ? { search: q } : {}) },
+        }),
         api.get('/billing/invoices').catch(() => ({ data: { invoices: [] } })),
       ]);
       setPatients(patRes.data.patients || []);
@@ -44,7 +53,7 @@ export default function MyPatients() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [mine]);
 
   useEffect(() => {
     const t = setTimeout(() => fetchPatients(search.trim()), 300);
@@ -61,11 +70,36 @@ export default function MyPatients() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="My Patients"
+        title={mine ? 'My Patients' : 'All Patients'}
         description={
-          stats.mineOnly === false
-            ? 'No patients assigned to you yet — showing every admitted patient'
-            : 'Patients currently admitted under your care'
+          mine
+            ? 'Patients you are the assigned nurse for — ward, bed and vitals at a glance.'
+            : stats.mineOnly === false
+              ? 'No patients assigned to you yet — showing every admitted patient with assignments'
+              : 'Every admitted patient with doctor & nurse assignments (yours marked MINE)'
+        }
+        icon={mine ? Heart : Users}
+        action={
+          <div className="inline-flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
+            <button
+              type="button"
+              onClick={() => navigate('/nurse/my-patients')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                mine ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Heart className="w-3.5 h-3.5" /> Mine
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/nurse/patients')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                !mine ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" /> All
+            </button>
+          </div>
         }
       />
 
@@ -100,7 +134,7 @@ export default function MyPatients() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name or patient ID..."
+              placeholder="Search by name, phone no. or patient ID..."
               className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -118,12 +152,14 @@ export default function MyPatients() {
                 <tr className="bg-gray-50">
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Patient ID</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Name</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Assigned To</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Ward</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Room</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Condition</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Last Vitals</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Billing</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -136,6 +172,17 @@ export default function MyPatients() {
                         <span className="ml-2 text-[11px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-semibold">
                           MINE
                         </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {patient.assignedDoctor || patient.assignedNurse ? (
+                        <span className="space-x-1">
+                          {patient.assignedDoctor && <span className="font-medium text-gray-900">Dr. {patient.assignedDoctor}</span>}
+                          {patient.assignedDoctor && patient.assignedNurse && <span className="text-gray-400">·</span>}
+                          {patient.assignedNurse && <span>{patient.assignedNurse} (nurse)</span>}
+                        </span>
+                      ) : (
+                        '—'
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">{patient.ward || '—'}</td>
@@ -167,6 +214,15 @@ export default function MyPatients() {
                         );
                       })()}
                     </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => setViewing(patient._id)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100"
+                        title="View full history"
+                      >
+                        <Eye className="w-3.5 h-3.5" /> View
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -174,6 +230,14 @@ export default function MyPatients() {
           )}
         </div>
       </div>
+
+      {viewing && (
+        <PatientHistoryModal
+          patientId={viewing}
+          onClose={() => setViewing(null)}
+          onRefresh={() => fetchPatients(search.trim())}
+        />
+      )}
     </div>
   );
 }

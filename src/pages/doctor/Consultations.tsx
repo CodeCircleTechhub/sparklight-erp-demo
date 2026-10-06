@@ -1,7 +1,32 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Stethoscope, Calendar, CheckCircle, Clock, CalendarCheck, Plus, Loader2, AlertCircle, Save } from 'lucide-react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Stethoscope, Calendar, CheckCircle, Clock, CalendarCheck, Plus, Loader2, AlertCircle, Save, Lock, Pencil, X } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageComponents';
 import api from '../../services/api';
+
+// consultation note types offered by the hospital
+const CONSULTATION_TYPES = [
+  'General',
+  'Pediatric',
+  'Obstetric and Gynecological',
+  'Surgical',
+  'Cardiological',
+  'Dermatological',
+  'Orthopedic',
+  'Psychiatric',
+  'Ophthalmological',
+];
+
+const typeColors: Record<string, string> = {
+  General: 'bg-gray-100 text-gray-700',
+  Pediatric: 'bg-pink-100 text-pink-700',
+  'Obstetric and Gynecological': 'bg-rose-100 text-rose-700',
+  Surgical: 'bg-orange-100 text-orange-700',
+  Cardiological: 'bg-red-100 text-red-700',
+  Dermatological: 'bg-amber-100 text-amber-700',
+  Orthopedic: 'bg-lime-100 text-lime-700',
+  Psychiatric: 'bg-violet-100 text-violet-700',
+  Ophthalmological: 'bg-cyan-100 text-cyan-700',
+};
 
 const fmtDate = (d?: string | null) =>
   d
@@ -24,7 +49,16 @@ export default function Consultations() {
   const [notice, setNotice] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ patient: '', type: 'Consultation', chiefComplaint: '', notes: '' });
+  const [form, setForm] = useState({
+    patient: '',
+    type: 'Consultation',
+    consultationType: 'General',
+    chiefComplaint: '',
+    notes: '',
+  });
+  // inline edit of an existing note (locked after 11:59pm of its creation day)
+  const [editing, setEditing] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ consultationType: 'General', notes: '' });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -59,12 +93,30 @@ export default function Consultations() {
     setNotice('');
     try {
       await api.post('/doctor/consultations', form);
-      setForm({ patient: '', type: 'Consultation', chiefComplaint: '', notes: '' });
+      setForm({ patient: '', type: 'Consultation', consultationType: 'General', chiefComplaint: '', notes: '' });
       setShowForm(false);
       setNotice('Consultation recorded.');
       await fetchData();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Could not save consultation');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const update = async () => {
+    if (!editing) return;
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      await api.put(`/doctor/consultations/${editing._id}`, editForm);
+      setEditing(null);
+      setNotice('Consultation note updated.');
+      await fetchData();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Could not update the consultation');
+      if (err.response?.status === 403) await fetchData();
     } finally {
       setSaving(false);
     }
@@ -123,7 +175,7 @@ export default function Consultations() {
         </div>
 
         {showForm && (
-          <form onSubmit={submit} className="p-4 border-b border-gray-200 grid grid-cols-1 md:grid-cols-4 gap-3">
+          <form onSubmit={submit} className="p-4 border-b border-gray-200 grid grid-cols-1 md:grid-cols-5 gap-3">
             <select value={form.patient} onChange={(e) => setForm({ ...form, patient: e.target.value })} className={field}>
               <option value="">Select patient</option>
               {patients.map((p) => (
@@ -137,6 +189,16 @@ export default function Consultations() {
               <option>Follow-up</option>
               <option>Emergency</option>
               <option>Telemedicine</option>
+            </select>
+            <select
+              value={form.consultationType}
+              onChange={(e) => setForm({ ...form, consultationType: e.target.value })}
+              className={field}
+              title="Consultation note type"
+            >
+              {CONSULTATION_TYPES.map((t) => (
+                <option key={t}>{t}</option>
+              ))}
             </select>
             <input
               value={form.chiefComplaint}
@@ -155,9 +217,13 @@ export default function Consultations() {
             <textarea
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              placeholder="Notes (optional)"
-              rows={2}
-              className={`${field} md:col-span-4`}
+              placeholder={
+                form.consultationType === 'General'
+                  ? "Consultation note - the patient's current health status"
+                  : `${form.consultationType} consultation note`
+              }
+              rows={4}
+              className={`${field} md:col-span-5`}
             />
           </form>
         )}
@@ -176,26 +242,104 @@ export default function Consultations() {
                 <tr className="bg-gray-50">
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Consultation ID</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Patient</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Note Type</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Date</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Diagnosis</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Prescription</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Note</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {items.map((c) => (
-                  <tr key={c._id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-medium text-blue-600">{c.consultationId}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{c.patientName}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{fmtDate(c.date)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{c.diagnosis || '—'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{c.prescription || '—'}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[c.status] || 'bg-gray-100 text-gray-600'}`}>
-                        {c.status}
-                      </span>
-                    </td>
-                  </tr>
+                  <Fragment key={c._id}>
+                    <tr className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm font-medium text-blue-600">{c.consultationId}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900">{c.patientName}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
+                            typeColors[c.consultationType || 'General'] || 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {c.consultationType || 'General'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{fmtDate(c.date)}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 max-w-[280px]">
+                        <span className="line-clamp-2">{c.notes || '—'}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[c.status] || 'bg-gray-100 text-gray-600'}`}>
+                          {c.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {c.editable === false ? (
+                          <span
+                            className="inline-flex items-center gap-1 text-xs text-gray-400"
+                            title="Locked — consultation notes may only be edited until 11:59pm on the day they were created"
+                          >
+                            <Lock className="w-3.5 h-3.5" /> Locked
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setEditing(c);
+                              setEditForm({
+                                consultationType: c.consultationType || 'General',
+                                notes: c.notes || '',
+                              });
+                              setError('');
+                            }}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50"
+                          >
+                            <Pencil className="w-3 h-3" />
+                            Edit
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                    {editing?._id === c._id && (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-3 bg-blue-50/50">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <select
+                              value={editForm.consultationType}
+                              onChange={(e) => setEditForm({ ...editForm, consultationType: e.target.value })}
+                              className={field}
+                            >
+                              {CONSULTATION_TYPES.map((t) => (
+                                <option key={t}>{t}</option>
+                              ))}
+                            </select>
+                            <textarea
+                              value={editForm.notes}
+                              onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                              rows={3}
+                              className={`${field} md:col-span-2`}
+                              placeholder="Consultation note"
+                            />
+                          </div>
+                          <div className="flex justify-end gap-2 mt-2">
+                            <button
+                              onClick={() => setEditing(null)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-white"
+                            >
+                              <X className="w-3.5 h-3.5" /> Cancel
+                            </button>
+                            <button
+                              onClick={update}
+                              disabled={saving}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                              Update
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

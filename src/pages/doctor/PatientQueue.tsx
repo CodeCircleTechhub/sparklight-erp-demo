@@ -61,6 +61,10 @@ export default function PatientQueue() {
     { label: 'Emergency', value: stats.emergency, icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-100' },
   ];
 
+  const active = items.filter(
+    (i) => i.status === 'Waiting' || i.status === 'Called' || i.status === 'In Consultation',
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader title="Patient Queue" icon={Users} />
@@ -93,8 +97,12 @@ export default function PatientQueue() {
             <Loader2 className="w-4 h-4 animate-spin" />
             Loading queue...
           </div>
-        ) : items.length === 0 ? (
-          <p className="py-12 text-center text-sm text-gray-500">No patients in the queue today.</p>
+        ) : active.length === 0 ? (
+          <p className="py-12 text-center text-sm text-gray-500">
+            {items.length > 0
+              ? 'All patients in today\u2019s queue have been attended.'
+              : 'No patients in the queue today.'}
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -109,7 +117,7 @@ export default function PatientQueue() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {items.map((item) => (
+                {active.map((item) => (
                   <tr key={item._id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">#{item.position}</td>
                     <td className="px-4 py-3 text-sm text-gray-900">
@@ -138,15 +146,15 @@ export default function PatientQueue() {
                             {item.status === 'Waiting' ? 'Call' : 'Start'}
                           </button>
                         )}
-                        {item.status === 'In Consultation' && (
-                          <button
-                            onClick={() => advance(item._id, 'Completed')}
-                            disabled={busy === item._id}
-                            className="px-2.5 py-1 rounded-lg text-xs font-medium bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-50"
-                          >
-                            Complete
-                          </button>
-                        )}
+                        <button
+                          onClick={() => advance(item._id, 'Completed')}
+                          disabled={busy === item._id}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-50"
+                          title="Mark as attended and remove from the queue"
+                        >
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          Attended
+                        </button>
                       </div>
                     </td>
                   </tr>

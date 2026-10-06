@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Users, Activity, CalendarCheck, LogOut, Search, Loader2, AlertCircle, Receipt } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Users, Activity, CalendarCheck, LogOut, Search, Loader2, AlertCircle, Receipt, Eye, UserCheck } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageComponents';
 import PatientBillingModal from '../../components/shared/PatientBillingModal';
+import PatientHistoryModal from '../../components/shared/PatientHistoryModal';
 import { billingBadge } from '../../utils/billingStatus';
 import api from '../../services/api';
 
@@ -45,6 +47,10 @@ const fmtDate = (d?: string | null) =>
     : '—';
 
 export default function MyPatients() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  // /doctor/my-patients = only the patients assigned to me; /doctor/patients = everybody
+  const mine = location.pathname.endsWith('/my-patients');
   const [patients, setPatients] = useState<any[]>([]);
   const [stats, setStats] = useState({ total: 0, active: 0, followUp: 0, discharged: 0 });
   const [loading, setLoading] = useState(true);
@@ -52,6 +58,7 @@ export default function MyPatients() {
   const [search, setSearch] = useState('');
   const [range, setRange] = useState<RangeKey>('all');
   const [billing, setBilling] = useState(false);
+  const [viewing, setViewing] = useState<string | null>(null);
   const [invoices, setInvoices] = useState<any[]>([]);
 
   const fetchData = useCallback(async (q?: string) => {
@@ -59,6 +66,7 @@ export default function MyPatients() {
     setError('');
     try {
       const params: any = {};
+      if (mine) params.mine = '1';
       if (q) params.search = q;
       const [patRes, billRes] = await Promise.all([
         api.get('/doctor/patients', { params }),
@@ -72,7 +80,7 @@ export default function MyPatients() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [mine]);
 
   useEffect(() => {
     fetchData();
@@ -100,7 +108,13 @@ export default function MyPatients() {
   }, [range, filtered, stats]);
 
   const cards = [
-    { label: 'Total', value: rangeStats.total, icon: Users, color: 'text-blue-600', bg: 'bg-blue-100' },
+    {
+      label: mine ? 'Assigned to You' : 'Total',
+      value: rangeStats.total,
+      icon: mine ? UserCheck : Users,
+      color: 'text-blue-600',
+      bg: 'bg-blue-100',
+    },
     { label: 'Active', value: rangeStats.active, icon: Activity, color: 'text-green-600', bg: 'bg-green-100' },
     { label: 'Follow-up', value: rangeStats.followUp, icon: CalendarCheck, color: 'text-yellow-600', bg: 'bg-yellow-100' },
     { label: 'Discharged', value: rangeStats.discharged, icon: LogOut, color: 'text-gray-600', bg: 'bg-gray-100' },
@@ -109,8 +123,13 @@ export default function MyPatients() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="My Patients"
-        icon={Users}
+        title={mine ? 'My Patients' : 'All Patients'}
+        description={
+          mine
+            ? 'Only the patients assigned to you — via appointment or as part of the ward care team.'
+            : 'Every registered patient — open any chart to attend them; your entries are saved under your name.'
+        }
+        icon={mine ? UserCheck : Users}
         action={
           <button
             type="button"
@@ -126,6 +145,14 @@ export default function MyPatients() {
         <PatientBillingModal
           onClose={() => setBilling(false)}
           onSaved={() => fetchData(search.trim() || undefined)}
+        />
+      )}
+
+      {viewing && (
+        <PatientHistoryModal
+          patientId={viewing}
+          onClose={() => setViewing(null)}
+          onRefresh={() => fetchData(search.trim() || undefined)}
         />
       )}
 
@@ -154,7 +181,7 @@ export default function MyPatients() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search patients..."
+                placeholder="Search by name, phone no. or patient ID..."
                 className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -174,6 +201,26 @@ export default function MyPatients() {
                 </button>
               ))}
             </div>
+            <div className="inline-flex rounded-lg border border-gray-200 p-0.5 bg-gray-50 self-start">
+              <button
+                type="button"
+                onClick={() => navigate('/doctor/my-patients')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  mine ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <UserCheck className="w-3.5 h-3.5" /> Mine
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/doctor/patients')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  !mine ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" /> All
+              </button>
+            </div>
           </div>
         </div>
 
@@ -191,7 +238,11 @@ export default function MyPatients() {
           </div>
         ) : filtered.length === 0 ? (
           <p className="py-12 text-center text-sm text-gray-500">
-            {patients.length === 0 ? 'No patients found.' : 'No patients in the selected period.'}
+            {patients.length === 0
+              ? mine
+                ? 'No patients assigned to you yet — they appear here once an appointment is assigned to you or you admit one to your ward.'
+                : 'No patients found.'
+              : 'No patients in the selected period.'}
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -200,12 +251,15 @@ export default function MyPatients() {
                 <tr className="bg-gray-50">
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Patient ID</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Name</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Phone</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Age</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Gender</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Condition</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Last Visit</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Assigned To</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Billing</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -213,10 +267,34 @@ export default function MyPatients() {
                   <tr key={p._id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-medium text-blue-600">{p.patientId}</td>
                     <td className="px-4 py-3 text-sm text-gray-900">{p.name}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{p.phone || '—'}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{p.age ?? '—'}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{p.gender || '—'}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{p.condition || '—'}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{fmtDate(p.lastVisit)}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {p.assignedToMe && (
+                        <span className="inline-flex items-center gap-1 mr-1.5 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-semibold">
+                          <UserCheck className="w-3 h-3" /> Assigned to you
+                        </span>
+                      )}
+                      {p.assignedToName ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <UserCheck className="w-3.5 h-3.5 text-blue-500" />
+                          <span>
+                            {p.assignedToName}
+                            {p.assignedNurseName && (
+                              <span className="text-xs text-gray-400"> - {p.assignedNurseName} (nurse)</span>
+                            )}
+                            {p.assignedToRole && (
+                              <span className="text-xs text-gray-400"> A� {p.assignedToRole.replace(/-/g, ' ')}</span>
+                            )}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">Unassigned - available to all</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[p.status] || 'bg-gray-100 text-gray-600'}`}>
                         {p.status}
@@ -231,6 +309,15 @@ export default function MyPatients() {
                           </span>
                         );
                       })()}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => setViewing(p._id)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        View
+                      </button>
                     </td>
                   </tr>
                 ))}

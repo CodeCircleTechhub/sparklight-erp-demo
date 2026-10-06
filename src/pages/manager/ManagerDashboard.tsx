@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import api from '../../services/api';
 import ApplyLeaveButton from '../../components/shared/ApplyLeaveButton';
+import EmergencyPanel from '../../components/shared/EmergencyPanel';
 import { GroupedBarChart, formatNaira, formatNairaCompact } from '../../components/charts/Charts';
 
 const statusColors: Record<string, string> = {
@@ -148,6 +149,8 @@ export default function ManagerDashboard() {
             </div>
           ))}
         </div>
+
+        <EmergencyPanel canRemove />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Department Performance */}

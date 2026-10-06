@@ -43,13 +43,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (identifier: string, password: string) => {
     try {
-      const isStaffId = /^S\d+$/.test(identifier);
-      const isPatientId = /^PT-\d+$/i.test(identifier.trim());
+      const cleaned = identifier.trim();
+      // Staff IDs are department-coded (SPHDR001, SPHNR001, ...) or legacy S001
+      const isStaffId = /^(SPH[A-Z]{1,3}|S)\d{1,5}$/i.test(cleaned);
+      const isPatientId = /^PT-\d+$/i.test(cleaned);
       const payload: Record<string, string> = { password };
       if (isPatientId) {
-        payload.patientId = identifier.trim().toUpperCase();
+        payload.patientId = cleaned.toUpperCase();
       } else if (isStaffId) {
-        payload.staffId = identifier;
+        payload.staffId = cleaned.toUpperCase();
       } else {
         payload.email = identifier;
       }

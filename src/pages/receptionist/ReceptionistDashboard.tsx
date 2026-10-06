@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import api from '../../services/api';
 import ApplyLeaveButton from '../../components/shared/ApplyLeaveButton';
+import EmergencyPanel from '../../components/shared/EmergencyPanel';
 
 const statusColors: Record<string, string> = {
   Waiting: 'bg-yellow-100 text-yellow-700',
@@ -116,6 +117,8 @@ export default function ReceptionistDashboard() {
                 </div>
               ))}
             </div>
+
+            <EmergencyPanel canRemove />
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">

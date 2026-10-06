@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   LayoutList, Users, Clock, Stethoscope, CheckCircle,
-  Loader2, AlertCircle, Megaphone, Plus, X, Search, PlayCircle, Ban, CheckCheck
+  Loader2, AlertCircle, Megaphone, Plus, X, Search, PlayCircle, Ban, CheckCheck, Calendar
 } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageComponents';
 import api from '../../services/api';
@@ -13,6 +13,13 @@ const statusColors: Record<string, string> = {
   Completed: 'bg-violet-100 text-violet-700',
   Cancelled: 'bg-red-100 text-red-700',
 };
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
+const YEARS = (() => {
+  const y = new Date().getFullYear();
+  return [y - 1, y, y + 1];
+})();
 
 export default function QueueManagement() {
   const [queue, setQueue] = useState<any[]>([]);
@@ -27,10 +34,31 @@ export default function QueueManagement() {
   const [department, setDepartment] = useState('');
   const [reason, setReason] = useState('');
   const [addError, setAddError] = useState('');
+  const [vDay, setVDay] = useState(() => String(new Date().getDate()));
+  const [vMonth, setVMonth] = useState(() => String(new Date().getMonth()));
+  const [vYear, setVYear] = useState(() => String(new Date().getFullYear()));
+
+  const viewDate = (() => {
+    const d = new Date(Number(vYear), Number(vMonth), Number(vDay), 12, 0, 0);
+    if (d.getFullYear() !== Number(vYear) || d.getMonth() !== Number(vMonth) || d.getDate() !== Number(vDay)) return null;
+    return d;
+  })();
+  const viewDateIso = viewDate ? viewDate.toISOString() : '';
+  const isToday = (() => {
+    const t = new Date();
+    return viewDate
+      ? viewDate.getDate() === t.getDate() && viewDate.getMonth() === t.getMonth() && viewDate.getFullYear() === t.getFullYear()
+      : true;
+  })();
+  const viewDateLabel = viewDate
+    ? viewDate.toLocaleDateString('en-NG', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+    : '-';
 
   const fetchQueue = useCallback(async () => {
     try {
-      const { data } = await api.get('/receptionist/queue');
+      const { data } = await api.get('/receptionist/queue', {
+        params: viewDateIso ? { date: viewDateIso } : {},
+      });
       setQueue(data.queue || []);
       setStats({
         inQueue: data.inQueue ?? 0,
@@ -43,7 +71,7 @@ export default function QueueManagement() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [viewDateIso]);
 
   useEffect(() => {
     fetchQueue();
@@ -115,6 +143,7 @@ export default function QueueManagement() {
         patient: selectedPatient._id,
         department,
         reason,
+        date: viewDateIso || undefined,
       });
       setShowAdd(false);
       setSelectedPatient(null);
@@ -131,7 +160,7 @@ export default function QueueManagement() {
     { label: 'In Queue', value: stats.inQueue, icon: Users, color: 'bg-blue-500' },
     { label: 'Waiting', value: stats.waiting, icon: Clock, color: 'bg-amber-500' },
     { label: 'With Doctor', value: stats.withDoctor, icon: Stethoscope, color: 'bg-green-500' },
-    { label: 'Completed Today', value: stats.completed, icon: CheckCircle, color: 'bg-violet-500' },
+    { label: isToday ? 'Completed Today' : 'Completed', value: stats.completed, icon: CheckCircle, color: 'bg-violet-500' },
   ];
 
   const patientName = (q: any) =>
@@ -167,6 +196,47 @@ export default function QueueManagement() {
             <Plus className="w-4 h-4" />
             Add to Queue
           </button>
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
+            <Calendar className="w-4 h-4 text-gray-400" />
+            <span className="text-gray-500 text-xs font-medium hidden sm:inline">Queue for</span>
+            <select
+              value={vDay}
+              onChange={(e) => setVDay(e.target.value)}
+              className="border-0 bg-transparent text-sm text-gray-900 focus:outline-none cursor-pointer"
+              title="Day"
+            >
+              {DAYS.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+            <select
+              value={vMonth}
+              onChange={(e) => setVMonth(e.target.value)}
+              className="border-0 bg-transparent text-sm text-gray-900 focus:outline-none cursor-pointer"
+              title="Month"
+            >
+              {MONTHS.map((m, i) => (
+                <option key={m} value={i}>
+                  {m}
+                </option>
+              ))}
+            </select>
+            <select
+              value={vYear}
+              onChange={(e) => setVYear(e.target.value)}
+              className="border-0 bg-transparent text-sm text-gray-900 focus:outline-none cursor-pointer"
+              title="Year"
+            >
+              {YEARS.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+            {isToday && <span className="text-xs text-emerald-600 font-medium">Today</span>}
+          </div>
         </div>
 
         {error && (
@@ -193,7 +263,13 @@ export default function QueueManagement() {
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Current Queue</h2>
+          <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Queue</h2>
+            <p className="text-sm text-gray-500">
+              Showing <span className="font-medium text-gray-700">{viewDateLabel}</span>
+              <span className="text-gray-400"> · numbering restarts every day</span>
+            </p>
+          </div>
           <div className="overflow-x-auto">
             {loading ? (
               <div className="flex items-center justify-center py-10">
@@ -284,7 +360,13 @@ export default function QueueManagement() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900">Add to Queue</h2>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Add to Queue</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  For {viewDateLabel}
+                  {!isToday && <span className="text-indigo-600 font-medium"> (scheduled)</span>}
+                </p>
+              </div>
               <button
                 onClick={() => { setShowAdd(false); setAddError(''); }}
                 className="p-2 hover:bg-gray-100 rounded-lg"

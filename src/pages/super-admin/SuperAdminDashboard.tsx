@@ -23,6 +23,7 @@ import {
 import api from '../../services/api';
 import StatCard from '../../components/ui/StatCard';
 import ApplyLeaveButton from '../../components/shared/ApplyLeaveButton';
+import EmergencyPanel from '../../components/shared/EmergencyPanel';
 import { BarChart, GroupedBarChart, DonutChart, formatNaira, formatNairaCompact } from '../../components/charts/Charts';
 
 function registrationSeries(patients: any[]): { label: string; value: number }[] {
@@ -196,6 +197,8 @@ export default function SuperAdminDashboard() {
           <StatCard key={stat.title} {...stat} />
         ))}
       </div>
+
+      <EmergencyPanel canRemove />
 
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

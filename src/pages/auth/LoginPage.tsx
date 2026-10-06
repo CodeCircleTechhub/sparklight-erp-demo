@@ -72,10 +72,10 @@ export default function LoginPage() {
     if (selectedRole === 'admin') return 'admin@sparklight.com';
     if (selectedRole === 'manager') return 'manager@sparklight.com';
     if (selectedRole === 'patient') return 'Patient ID (e.g. PT-001) or email';
-    return 'Staff ID (e.g. S001) or email';
+    return 'Staff ID (e.g. SPHDR001) or email';
   };
   const getLoginHint = () => {
-    if (isStaffLogin) return 'Staff: Use your Staff ID and surname (lowercase) as password. Change password after first login.';
+    if (isStaffLogin) return 'Staff: Use your Staff ID (e.g. SPHDR001) and surname (lowercase) as password. Change password after first login.';
     if (isPatientLogin) return 'Patients: Use your Patient ID (e.g. PT-001) or email. Default password was sent to your email — change it after first login.';
     return '';
   };
@@ -263,9 +263,9 @@ export default function LoginPage() {
                   />
                   <span className="text-sm text-gray-600">Remember Me</span>
                 </label>
-                <a href="#" className="text-sm text-primary-600 hover:text-primary-700 font-medium">
-                  Forgot Password?
-                </a>
+                  <Link to="/forgot-password" className="text-sm text-primary-600 hover:text-primary-700 font-medium">
+                    Forgot Password?
+                  </Link>
               </div>
 
               {/* Login Button */}

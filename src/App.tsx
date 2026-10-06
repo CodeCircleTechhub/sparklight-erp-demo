@@ -14,6 +14,8 @@ import NotFoundPage from './pages/public/NotFoundPage';
 
 // Auth Pages
 import LoginPage from './pages/auth/LoginPage';
+import ForgotPassword from './pages/auth/ForgotPassword';
+import ResetPassword from './pages/auth/ResetPassword';
 
 // Super Admin Pages
 import SuperAdminDashboard from './pages/super-admin/SuperAdminDashboard';
@@ -214,6 +216,8 @@ function AppRoutes() {
 
       {/* Login - redirect to dashboard if already logged in */}
       <Route path="/login" element={user ? <Navigate to={getDashboardRoute(user.role)} replace /> : <LoginPage />} />
+      <Route path="/forgot-password" element={user ? <Navigate to={getDashboardRoute(user.role)} replace /> : <ForgotPassword />} />
+      <Route path="/reset-password" element={user ? <Navigate to={getDashboardRoute(user.role)} replace /> : <ResetPassword />} />
 
       {/* Chat */}
       <Route path="/chat" element={user ? <ChatPage /> : <Navigate to="/login" replace />} />
@@ -317,6 +321,7 @@ function AppRoutes() {
       <Route path="/nurse" element={<DashboardLayout role="nurse" />}>
         <Route path="dashboard" element={<NurseDashboard />} />
         <Route path="patients" element={<MyPatients />} />
+        <Route path="my-patients" element={<MyPatients />} />
         <Route path="queue" element={<PatientQueue />} />
         <Route path="vital-signs" element={<VitalSigns />} />
         <Route path="notes" element={<NursingNotes />} />
@@ -333,6 +338,7 @@ function AppRoutes() {
       <Route path="/doctor" element={<DashboardLayout role="doctor" />}>
         <Route path="dashboard" element={<DoctorDashboard />} />
         <Route path="patients" element={<DoctorMyPatients />} />
+        <Route path="my-patients" element={<DoctorMyPatients />} />
         <Route path="queue" element={<DoctorPatientQueue />} />
         <Route path="consultations" element={<DoctorConsultations />} />
         <Route path="records" element={<MedicalRecords />} />

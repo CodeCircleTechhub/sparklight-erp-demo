@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import ApplyLeaveButton from '../../components/shared/ApplyLeaveButton';
+import EmergencyPanel from '../../components/shared/EmergencyPanel';
 import {
   MessageSquare,
   AlertTriangle,
@@ -213,6 +214,8 @@ export default function CustomerCareDashboard() {
             </div>
           ))}
         </div>
+
+        <EmergencyPanel canRemove className="mb-8" />
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           {/* Recent Enquiries */}
