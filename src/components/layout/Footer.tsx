@@ -20,9 +20,10 @@ const departments = [
 ];
 
 const contactInfo = [
-  { icon: MapPin, text: '123 Healthcare Avenue, Medical District, Abuja, Nigeria' },
-  { icon: Phone, text: '+2348086142293' },
-  { icon: Mail, text: 'info@sparklight.com' },
+  { icon: MapPin, text: '99, Palm Avenue Street, Mushing, Lagos' },
+  { icon: Phone, text: '08086142259 · 09134795797' },
+  { icon: Mail, text: 'sparklighthospital@yahoo.com' },
+  { icon: Globe, text: 'www.sparklighthospital.com' },
   { icon: Clock, text: '24/7 Emergency Services' },
 ];
 

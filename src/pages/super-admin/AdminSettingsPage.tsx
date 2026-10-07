@@ -9,9 +9,9 @@ export default function AdminSettingsPage() {
 
   const [general, setGeneral] = useState({
     hospitalName: 'SparkLight Specialist Hospital',
-    address: '123 Medical Road, Abuja, Nigeria',
-    phone: '+2348086142293',
-    email: 'info@sparklighthospital.ng',
+    address: '99, Palm Avenue Street, Mushing, Lagos',
+    phone: '08086142259, 09134795797',
+    email: 'sparklighthospital@yahoo.com',
   });
 
   const [profile, setProfile] = useState({

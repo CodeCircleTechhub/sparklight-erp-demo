@@ -154,6 +154,8 @@ export default function ReceiptModal({ invoiceId, onClose }: Props) {
               <div>
                 <p className="text-xl font-bold">SparkLight Hospital</p>
                 <p className="text-blue-200 text-xs mt-0.5">Enterprise Hospital Management · Billing & Accounts</p>
+                <p className="text-blue-200 text-[11px] mt-1">99, Palm Avenue Street, Mushing, Lagos</p>
+                <p className="text-blue-200 text-[11px]">www.sparklighthospital.com | sparklighthospital@yahoo.com | 08086142259, 09134795797</p>
               </div>
               <div className="text-right">
                 <p className="text-xs text-blue-200">{paid ? 'RECEIPT' : 'PATIENT INVOICE'}</p>

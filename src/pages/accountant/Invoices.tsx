@@ -128,7 +128,7 @@ export default function Invoices() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-100">
-                    {['Invoice ID', 'Patient', 'Date', 'Services', 'Amount', 'Status', 'Actions'].map((h) => (
+                    {['Invoice ID', 'Patient', 'Date', 'Description', 'Amount', 'Status', 'Actions'].map((h) => (
                       <th
                         key={h}
                         className={`text-xs font-medium text-gray-500 uppercase tracking-wider px-5 py-3 ${

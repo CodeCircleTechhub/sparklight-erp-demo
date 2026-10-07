@@ -15,17 +15,17 @@ const contactInfo = [
   {
     icon: MapPin,
     title: 'Address',
-    lines: ['123 Healthcare Avenue', 'Medical District, Abuja, Nigeria'],
+    lines: ['99, Palm Avenue Street', 'Mushing, Lagos'],
   },
   {
     icon: Phone,
     title: 'Phone',
-    lines: ['+2348086142293', '+2348012345678'],
+    lines: ['08086142259', '09134795797'],
   },
   {
     icon: Mail,
     title: 'Email',
-    lines: ['info@sparklighthospital.com', 'support@sparklight.com'],
+    lines: ['sparklighthospital@yahoo.com', 'www.sparklighthospital.com'],
   },
   {
     icon: Clock,
@@ -183,7 +183,7 @@ export default function ContactPage() {
                       value={formData.phone}
                       onChange={handleChange}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-colors"
-                      placeholder="+1 (555) 000-0000"
+                      placeholder="08012345678"
                     />
                   </div>
                 </div>
@@ -247,7 +247,7 @@ export default function ContactPage() {
                     Interactive Map
                   </p>
                   <p className="text-gray-400 text-sm mt-1">
-                    123 Healthcare Avenue, Medical District
+                    99, Palm Avenue Street, Mushing, Lagos
                   </p>
                 </div>
               </div>
