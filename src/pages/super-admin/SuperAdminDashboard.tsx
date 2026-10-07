@@ -19,6 +19,7 @@ import {
   CheckCircle,
   AlertCircle,
   ArrowRight,
+  Pill,
 } from 'lucide-react';
 import api from '../../services/api';
 import StatCard from '../../components/ui/StatCard';
@@ -72,6 +73,7 @@ export default function SuperAdminDashboard() {
   const [savingAlertEmail, setSavingAlertEmail] = useState(false);
   const [summary, setSummary] = useState<any>({});
   const [admStats, setAdmStats] = useState<any>({});
+  const [rxSales, setRxSales] = useState<any>(null);
   const [discharges, setDischarges] = useState<any[]>([]);
   const [regChart, setRegChart] = useState<{ label: string; value: number }[]>([]);
 
@@ -85,7 +87,7 @@ export default function SuperAdminDashboard() {
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
-        const [patientsRes, usersRes, visitsRes, appointmentsRes, outstandingRes, auditRes, billingRes, admissionsRes, dischargesRes, labRes] = await Promise.all([
+        const [patientsRes, usersRes, visitsRes, appointmentsRes, outstandingRes, auditRes, billingRes, admissionsRes, dischargesRes, labRes, rxSalesRes] = await Promise.all([
           api.get('/patients').catch(() => ({ data: {} })),
           api.get('/users').catch(() => ({ data: {} })),
           api.get('/visits').catch(() => ({ data: {} })),
@@ -96,6 +98,7 @@ export default function SuperAdminDashboard() {
           api.get('/admissions/stats').catch(() => ({ data: {} })),
           api.get('/admissions', { params: { status: 'Discharged', limit: 5 } }).catch(() => ({ data: {} })),
           api.get('/laboratory').catch(() => ({ data: {} })),
+          api.get('/pharmacy/sales').catch(() => ({ data: null })),
         ]);
 
         const patientList = patientsRes.data.patients || [];
@@ -103,6 +106,7 @@ export default function SuperAdminDashboard() {
         setSummary(billingRes.data || {});
         setAdmStats(admissionsRes.data || {});
         setDischarges((dischargesRes.data.items || []).slice(0, 5));
+        setRxSales(rxSalesRes.data || null);
 
         const totalPatients = patientsRes.data.total ?? 0;
         const activeStaff = (usersRes.data.users || [])
@@ -125,6 +129,8 @@ export default function SuperAdminDashboard() {
           { title: 'Admitted Patients', value: admitted.toLocaleString(), icon: BedDouble, color: 'yellow', trend: dischargedToday ? { value: `+${dischargedToday} out today`, isPositive: true } : undefined },
           { title: 'Pending Lab Requests', value: pendingLab.toLocaleString(), icon: FlaskConical, color: 'red' },
           { title: 'Outstanding Bills', value: formatNaira(outstandingBills), icon: CreditCard, color: 'red', trend: { value: `${(billingRes.data.counts?.pending ?? 0) + (billingRes.data.counts?.overdue ?? 0)} invoices`, isPositive: false } },
+          { title: 'Drug Sales Today', value: formatNaira(rxSalesRes.data?.today?.total || 0), icon: Pill, color: 'green' },
+          { title: 'Drug Sales This Month', value: formatNaira(rxSalesRes.data?.month?.total || 0), icon: DollarSign, color: 'purple', trend: rxSalesRes.data?.week?.total ? { value: `${formatNaira(rxSalesRes.data.week.total)} this week`, isPositive: true } : undefined },
         ]);
 
         const logs = auditRes.data.logs ?? [];
@@ -197,6 +203,39 @@ export default function SuperAdminDashboard() {
           <StatCard key={stat.title} {...stat} />
         ))}
       </div>
+
+      {rxSales && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <Pill className="w-5 h-5 text-purple-500" />
+              Drug Sales by Pharmacist (this month)
+            </h2>
+            <p className="text-sm text-gray-500">
+              Today <strong className="text-gray-900">{formatNaira(rxSales.today?.total || 0)}</strong>
+              <span className="mx-2 text-gray-300">|</span>
+              This week <strong className="text-gray-900">{formatNaira(rxSales.week?.total || 0)}</strong>
+              <span className="mx-2 text-gray-300">|</span>
+              This month <strong className="text-gray-900">{formatNaira(rxSales.month?.total || 0)}</strong>
+            </p>
+          </div>
+          {(rxSales.byPharmacist || []).length > 0 ? (
+            <div className="divide-y divide-gray-100">
+              {rxSales.byPharmacist.map((p: any) => (
+                <div key={p.name} className="flex items-center justify-between py-2 text-sm gap-4">
+                  <span className="text-gray-700 font-medium truncate">{p.name}</span>
+                  <span className="text-gray-500 shrink-0">
+                    {p.count} {p.count === 1 ? 'sale' : 'sales'}
+                  </span>
+                  <span className="font-semibold text-gray-900 shrink-0">{formatNaira(p.total)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400">No drug sales recorded this month yet.</p>
+          )}
+        </div>
+      )}
 
       <EmergencyPanel canRemove />
 

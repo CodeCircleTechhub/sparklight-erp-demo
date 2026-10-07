@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageComponents';
 import api from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 const statusColors: Record<string, string> = {
   'In Consultation': 'bg-blue-100 text-blue-800',
@@ -33,6 +34,7 @@ const waitLabel = (mins: number) => {
 };
 
 export default function PatientQueue() {
+  const { user } = useAuth();
   const [queue, setQueue] = useState<any[]>([]);
   const [counts, setCounts] = useState({ inQueue: 0, waiting: 0, withNurse: 0, completed: 0 });
   const [loading, setLoading] = useState(true);
@@ -253,19 +255,21 @@ export default function PatientQueue() {
                       )}
                       Attended
                     </button>
-                    <button
-                      onClick={() => removeEntry(item)}
-                      disabled={deletingId === String(item._id) || busy === String(item._id)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-red-600 hover:bg-red-50 hover:border-red-200 disabled:opacity-50"
-                      title="Remove from queue"
-                    >
-                      {deletingId === String(item._id) ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-4 h-4" />
-                      )}
-                      Remove
-                    </button>
+                    {user?.role === 'super-admin' && (
+                      <button
+                        onClick={() => removeEntry(item)}
+                        disabled={deletingId === String(item._id) || busy === String(item._id)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-red-600 hover:bg-red-50 hover:border-red-200 disabled:opacity-50"
+                        title="Remove from queue"
+                      >
+                        {deletingId === String(item._id) ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                        Remove
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

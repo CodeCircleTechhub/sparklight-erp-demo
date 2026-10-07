@@ -14,7 +14,10 @@ import {
   RotateCcw,
   ClipboardList,
   Loader2,
+  Wallet,
+  TrendingUp,
 } from "lucide-react";
+import { formatNaira } from '../../components/charts/Charts';
 
 interface PharmacyData {
   medicines: any[];
@@ -68,6 +71,7 @@ export default function PharmacistDashboard() {
 
   const [pharmacyData, setPharmacyData] = useState<PharmacyData | null>(null);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [sales, setSales] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -107,6 +111,13 @@ export default function PharmacistDashboard() {
           setPrescriptions(rows);
         } catch {
           setPrescriptions([]);
+        }
+
+        try {
+          const salesRes = await api.get('/pharmacy/sales');
+          setSales(salesRes.data || null);
+        } catch {
+          setSales(null);
         }
       } catch (err: any) {
         setError(err.response?.data?.message || 'Failed to load dashboard data');
@@ -150,6 +161,9 @@ export default function PharmacistDashboard() {
     { label: "In Stock", value: pharmacyData?.inStock ?? 0, icon: Clock, color: "bg-orange-500" },
     { label: "Low Stock Alerts", value: pharmacyData?.lowStockAlerts?.length ?? 0, icon: Pill, color: "bg-green-500" },
     { label: "Prescriptions", value: prescriptions.length, icon: DollarSign, color: "bg-emerald-500" },
+    { label: "Drug Sales Today", value: sales ? formatNaira(sales.today?.total || 0) : "-", icon: Wallet, color: "bg-teal-500" },
+    { label: "Drug Sales This Week", value: sales ? formatNaira(sales.week?.total || 0) : "-", icon: TrendingUp, color: "bg-indigo-500" },
+    { label: "Drug Sales This Month", value: sales ? formatNaira(sales.month?.total || 0) : "-", icon: DollarSign, color: "bg-purple-500" },
   ];
 
   return (
@@ -173,6 +187,39 @@ export default function PharmacistDashboard() {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Drug sales */}
+        <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <Wallet size={20} className="text-teal-500" />
+              Drug Sales
+            </h2>
+            <p className="text-sm text-gray-500">
+              Today <strong className="text-gray-900">{sales ? formatNaira(sales.today?.total || 0) : '-'}</strong>
+              <span className="mx-2 text-gray-300">|</span>
+              This week <strong className="text-gray-900">{sales ? formatNaira(sales.week?.total || 0) : '-'}</strong>
+              <span className="mx-2 text-gray-300">|</span>
+              This month <strong className="text-gray-900">{sales ? formatNaira(sales.month?.total || 0) : '-'}</strong>
+            </p>
+          </div>
+          <h3 className="text-sm font-medium text-gray-500 mb-2">Sales by pharmacist (this month)</h3>
+          {sales && (sales.byPharmacist || []).length > 0 ? (
+            <div className="divide-y divide-gray-100">
+              {sales.byPharmacist.map((p: any) => (
+                <div key={p.name} className="flex items-center justify-between py-2 text-sm gap-4">
+                  <span className="text-gray-700 font-medium truncate">{p.name}</span>
+                  <span className="text-gray-500 shrink-0">
+                    {p.count} {p.count === 1 ? 'sale' : 'sales'}
+                  </span>
+                  <span className="font-semibold text-gray-900 shrink-0">{formatNaira(p.total)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400">No drug sales recorded this month yet.</p>
+          )}
         </div>
 
         <div className="grid lg:grid-cols-2 gap-8 mb-8">

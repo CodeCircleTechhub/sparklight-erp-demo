@@ -108,12 +108,40 @@ const statusClass = (s?: string) => {
     case 'Called':
     case 'In Consultation':
       return 'bg-blue-100 text-blue-800';
+    case 'Not Available':
+      return 'bg-red-100 text-red-700';
     case 'Cancelled':
     case 'Rejected':
       return 'bg-gray-100 text-gray-600';
     default:
       return 'bg-gray-100 text-gray-700';
   }
+};
+
+// per-prescription drug money summary for the doctor/nurse view
+const DrugTotals = ({ rx }: { rx: any }) => {
+  const items = (rx.medications || []).filter((m: any) => m && m.name);
+  const total = items.reduce((s: number, m: any) => s + (Number(m.price) || 0), 0);
+  if (!total) return null;
+  const paid = items
+    .filter((m: any) => ['Paid', 'Dispensed'].includes(m.status || 'Pending'))
+    .reduce((s: number, m: any) => s + (Number(m.price) || 0), 0);
+  const dispensed = items.filter((m: any) => (m.status || 'Pending') === 'Dispensed').length;
+  const unavailable = items.filter((m: any) => m.status === 'Not Available').length;
+  return (
+    <p className="mt-2 border-t border-gray-100 pt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+      <span>
+        Drug total: <strong className="text-gray-900">₦{total.toLocaleString()}</strong>
+      </span>
+      <span>
+        Paid: <strong className="text-green-700">₦{paid.toLocaleString()}</strong>
+      </span>
+      <span>
+        Dispensed: <strong>{dispensed}/{items.length}</strong>
+      </span>
+      {unavailable > 0 && <span className="text-red-600">Not available: {unavailable}</span>}
+    </p>
+  );
 };
 
 const fmtDate = (d?: string | null) =>
@@ -270,6 +298,7 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
   const canMarkEmergency = EMG_MARK_ROLES.includes(role);
   const canClearEmergency = EMG_REMOVE_ROLES.includes(role);
   const canResult = LAB_ROLES.includes(role);
+  const canDownloadDocs = ['super-admin', 'manager', 'laboratory', 'doctor'].includes(role);
   const canDispense = PHARM_ROLES.includes(role);
   const isPharmacist = role === 'pharmacist';
   const myId = String(user?.id || '');
@@ -1678,12 +1707,12 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
                             <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${statusClass(p.status)}`}>
                               {p.status}
                             </span>
-                            {canDispense && p.status === 'Pending' && (
+                            {canDispense && p.status === 'Pending' && (p.medications || []).some((m: any) => (m.status || 'Pending') === 'Paid') && (
                               <button
                                 onClick={() => dispense(p)}
                                 disabled={busy}
                                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 disabled:opacity-50"
-                                title="Hand out medicines and decrement pharmacy stock"
+                                title="Hand out paid medicines and decrement pharmacy stock"
                               >
                                 <PackageCheck className="w-3.5 h-3.5" /> Dispense
                               </button>
@@ -1707,16 +1736,27 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
                         </div>
                         <ul className="mt-2 space-y-1">
                           {(p.medications || []).map((m: any, i: number) => (
-                            <li key={i} className="text-sm text-gray-800">
+                            <li key={i} className="flex items-start justify-between gap-2 text-sm text-gray-800">
+                              <span className="min-w-0">
                               <span className="font-medium">{m.name}</span>
                               <span className="text-gray-500">
                                 {' '}
                                 {[m.dosage, m.frequency, m.duration].filter(Boolean).join(' · ')}
                               </span>
                               {m.instructions && <p className="text-xs text-gray-500">{m.instructions}</p>}
+                              </span>
+                              <span className="flex items-center gap-2 shrink-0 pt-0.5">
+                                {m.price !== null && m.price !== undefined && (
+                                  <span className="text-xs text-gray-600">₦{Number(m.price).toLocaleString()}</span>
+                                )}
+                                <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${statusClass(m.status || 'Pending')}`}>
+                                  {m.status || 'Pending'}
+                                </span>
+                              </span>
                             </li>
                           ))}
                         </ul>
+                        <DrugTotals rx={p} />
                         {p.notes && <p className="text-xs text-gray-500 mt-1">Note: {p.notes}</p>}
                       </div>
                     ))
@@ -1888,36 +1928,38 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
               </p>
             </div>
 
-            <div className="border-t border-gray-100 mt-4 pt-3">
-              <p className="text-sm font-medium text-gray-700 mb-2">Documents</p>
-              <div className="space-y-1.5">
-                <button
-                  onClick={() => grab(() => downloadLabResultPdf(viewTest._id, `${viewTest.testId || 'lab'}-result.pdf`))}
-                  disabled={dlBusy}
-                  className="w-full flex items-center justify-between gap-2 text-sm bg-green-50 border border-green-100 text-green-700 rounded-lg px-3 py-2 hover:bg-green-100 transition-colors disabled:opacity-50"
-                >
-                  <span className="flex items-center gap-2 min-w-0">
-                    <FileText className="w-4 h-4 shrink-0" />
-                    <span className="truncate">Download result (PDF)</span>
-                  </span>
-                  <Download className="w-4 h-4" />
-                </button>
-                {(viewTest.attachments || []).map((a: any, i: number) => (
+            {canDownloadDocs && (
+              <div className="border-t border-gray-100 mt-4 pt-3">
+                <p className="text-sm font-medium text-gray-700 mb-2">Documents</p>
+                <div className="space-y-1.5">
                   <button
-                    key={`${a.path || a.name}-${i}`}
-                    onClick={() => grab(() => downloadLabAttachment(viewTest._id, i, a.name))}
+                    onClick={() => grab(() => downloadLabResultPdf(viewTest._id, `${viewTest.testId || 'lab'}-result.pdf`))}
                     disabled={dlBusy}
-                    className="w-full flex items-center justify-between gap-2 text-sm bg-gray-50 border border-gray-200 text-gray-700 rounded-lg px-3 py-2 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                    className="w-full flex items-center justify-between gap-2 text-sm bg-green-50 border border-green-100 text-green-700 rounded-lg px-3 py-2 hover:bg-green-100 transition-colors disabled:opacity-50"
                   >
                     <span className="flex items-center gap-2 min-w-0">
-                      <FileText className="w-4 h-4 shrink-0 text-gray-400" />
-                      <span className="truncate">{a.name}</span>
+                      <FileText className="w-4 h-4 shrink-0" />
+                      <span className="truncate">Download result (PDF)</span>
                     </span>
                     <Download className="w-4 h-4" />
                   </button>
-                ))}
+                  {(viewTest.attachments || []).map((a: any, i: number) => (
+                    <button
+                      key={`${a.path || a.name}-${i}`}
+                      onClick={() => grab(() => downloadLabAttachment(viewTest._id, i, a.name))}
+                      disabled={dlBusy}
+                      className="w-full flex items-center justify-between gap-2 text-sm bg-gray-50 border border-gray-200 text-gray-700 rounded-lg px-3 py-2 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                    >
+                      <span className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-4 h-4 shrink-0 text-gray-400" />
+                        <span className="truncate">{a.name}</span>
+                      </span>
+                      <Download className="w-4 h-4" />
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="flex justify-end mt-5">
               <button

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { FileText, Save, Loader2, AlertCircle, CheckCircle, Pencil, Trash2 } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageComponents';
 import api from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 const NOTE_TYPES = ['Progress Note', 'Critical Note', 'Discharge Note', 'Assessment Note', 'Handover Note'];
 
@@ -19,6 +20,7 @@ const fmtDate = (iso?: string) =>
   iso ? new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 
 export default function NursingNotes() {
+  const { user } = useAuth();
   const [patients, setPatients] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
   const [form, setForm] = useState({ ...emptyForm });
@@ -253,13 +255,15 @@ export default function NursingNotes() {
                           <button onClick={() => startEdit(note)} className="p-1.5 hover:bg-gray-100 rounded-lg" title="Edit">
                             <Pencil className="w-4 h-4 text-gray-600" />
                           </button>
-                          <button
-                            onClick={() => remove(String(note._id))}
-                            className="p-1.5 hover:bg-gray-100 rounded-lg"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4 text-red-600" />
-                          </button>
+                          {user?.role === 'super-admin' && (
+                            <button
+                              onClick={() => remove(String(note._id))}
+                              className="p-1.5 hover:bg-gray-100 rounded-lg"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-4 h-4 text-red-600" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
