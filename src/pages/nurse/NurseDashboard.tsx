@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Pill,
   Timer,
+  CalendarDays,
 } from 'lucide-react';
 
 interface StatCard {
@@ -32,6 +33,14 @@ interface QueueRow {
   id: string;
   name: string;
   waitingTime: string;
+  status: string;
+}
+
+interface ApptRow {
+  id: string;
+  time: string;
+  patientName: string;
+  withName: string;
   status: string;
 }
 
@@ -101,6 +110,7 @@ export default function NurseDashboard() {
   const [statCards, setStatCards] = useState<StatCard[]>([]);
   const [patientQueue, setPatientQueue] = useState<QueueRow[]>([]);
   const [medicationSchedule, setMedicationSchedule] = useState<Medication[]>([]);
+  const [todayAppointments, setTodayAppointments] = useState<ApptRow[]>([]);
   const [notificationCount, setNotificationCount] = useState(0);
 
   const fetchDashboardData = useCallback(async () => {
@@ -142,6 +152,17 @@ export default function NurseDashboard() {
           medicine: (m.medications || []).map((x: any) => x.name).filter(Boolean).join(', ') || 'Medicine',
           time: formatTime(m.date || m.createdAt),
           status: m.administeredAt ? 'Completed' : 'Pending',
+        }))
+      );
+
+      setTodayAppointments(
+        (data.appointments || []).slice(0, 8).map((a: any) => ({
+          id: a._id,
+          time: a.time || formatTime(a.date || a.createdAt),
+          patientName:
+            [a.patient?.firstName, a.patient?.surname].filter(Boolean).join(' ') || a.patientName || 'Unknown Patient',
+          withName: a.assignedTo?.fullName || a.doctor?.fullName || a.assignedToName || 'Unassigned',
+          status: a.status || 'Scheduled',
         }))
       );
     } catch (err: any) {
@@ -243,6 +264,37 @@ export default function NurseDashboard() {
         </div>
 
         <EmergencyPanel className="mb-8" />
+
+        {/* Today's appointments booked for patients */}
+        <div className="bg-white rounded-xl border border-gray-200 mb-8">
+          <div className="flex items-center justify-between p-5 border-b border-gray-100">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="w-5 h-5 text-teal-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Today's Appointments</h2>
+              <span className="bg-teal-100 text-teal-700 text-xs font-medium px-2 py-0.5 rounded-full">
+                {todayAppointments.length}
+              </span>
+            </div>
+          </div>
+          {todayAppointments.length === 0 ? (
+            <p className="text-center text-sm text-gray-400 py-8">No appointments booked for today</p>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {todayAppointments.map((a) => (
+                <li key={a.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Clock className="w-4 h-4 text-gray-400 shrink-0" />
+                    <span className="text-sm font-medium text-gray-900 truncate">{a.patientName}</span>
+                  </div>
+                  <div className="flex items-center gap-4 shrink-0">
+                    <span className="text-sm text-gray-500">with {a.withName}</span>
+                    <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-teal-50 text-teal-700">{a.status}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           {/* Patient Queue */}

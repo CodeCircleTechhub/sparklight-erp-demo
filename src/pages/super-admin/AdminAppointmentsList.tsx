@@ -150,7 +150,10 @@ export default function AdminAppointmentsList() {
                 </tr>
               </thead>
               <tbody>
-                {appointments.map((row) => (
+                {[...appointments]
+                  // pending patient requests carry no date yet, so date-desc would bury them
+                  .sort((a, b) => Number(b.status === 'Requested') - Number(a.status === 'Requested'))
+                  .map((row) => (
                   <tr key={row._id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                     <td className="py-3 px-4 font-medium text-blue-600 whitespace-nowrap">{row.appointmentId}</td>
                     <td className="py-3 px-4 font-medium text-gray-900 whitespace-nowrap">
@@ -161,7 +164,7 @@ export default function AdminAppointmentsList() {
                     </td>
                     <td className="py-3 px-4 text-gray-700 whitespace-nowrap">{row.department || '-'}</td>
                     <td className="py-3 px-4 text-gray-500 whitespace-nowrap">{formatDate(row.date)}</td>
-                    <td className="py-3 px-4 text-gray-500 whitespace-nowrap">{row.time}</td>
+                    <td className="py-3 px-4 text-gray-500 whitespace-nowrap">{row.time || '—'}</td>
                     <td className="py-3 px-4 text-gray-500 whitespace-nowrap">{row.type}</td>
                     <td className="py-3 px-4 whitespace-nowrap">
                       <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColor[row.status] || 'bg-gray-100 text-gray-700'}`}>

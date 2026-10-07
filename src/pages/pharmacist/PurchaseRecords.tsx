@@ -49,14 +49,15 @@ export default function PurchaseRecords() {
     setForm({ supplier: '', notes: '', items: [{ medicine: '', quantity: '1', unitPrice: '' }] });
     setFormError('');
     setShowForm(true);
-    if (!medicines.length) {
-      try {
-        const [medRes, supRes] = await Promise.all([api.get('/pharmacy'), api.get('/pharmacy/suppliers')]);
-        setMedicines(medRes.data.medicines || []);
-        setSuppliers(supRes.data.suppliers || []);
-      } catch (err: any) {
-        setFormError(err.response?.data?.message || 'Failed to load medicines/suppliers');
-      }
+    try {
+      const [medRes, supRes] = await Promise.all([
+        medicines.length ? Promise.resolve({ data: { medicines } }) : api.get('/pharmacy'),
+        api.get('/pharmacy/suppliers'),
+      ]);
+      setMedicines(medRes.data.medicines || []);
+      setSuppliers(supRes.data.suppliers || []);
+    } catch (err: any) {
+      setFormError(err.response?.data?.message || 'Failed to load medicines/suppliers');
     }
   };
 
@@ -244,6 +245,9 @@ export default function PurchaseRecords() {
                     </option>
                   ))}
                 </select>
+                {suppliers.length === 0 && (
+                  <p className="mt-1 text-xs text-gray-400">No suppliers yet — add one on the Suppliers page.</p>
+                )}
               </div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Items</label>
               {form.items.map((it, i) => (

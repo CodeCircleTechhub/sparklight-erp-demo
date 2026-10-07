@@ -114,7 +114,7 @@ export default function HRAppointments() {
                 <tbody className="divide-y divide-gray-50">
                   {appointments.map((a) => (
                     <tr key={a._id} className="hover:bg-gray-50">
-                      <td className="py-3 text-gray-900">{a.time}</td>
+                      <td className="py-3 text-gray-900">{a.time || '—'}</td>
                       <td className="py-3 text-gray-900">{patientName(a)}</td>
                       <td className="py-3 text-gray-600 hidden md:table-cell">{doctorName(a)}</td>
                       <td className="py-3 text-gray-600 hidden lg:table-cell">{a.department || 'General'}</td>

@@ -110,13 +110,14 @@ export default function CareAppointments() {
 
   const doctorName = (a: any) => a.assignedToName || a.assignedTo?.fullName || a.doctor?.fullName || 'Unassigned';
 
+  // pending patient requests carry no date yet, so date-desc would bury them
   const visible = appointments.filter((a) =>
     filter === 'All'
       ? true
       : filter === 'Requests'
       ? REQUEST_STATUSES.includes(a.status)
       : a.status === filter,
-  );
+  ).sort((a, b) => Number(b.status === 'Requested') - Number(a.status === 'Requested'));
   const requestCount = appointments.filter((a) => REQUEST_STATUSES.includes(a.status)).length;
 
   return (
@@ -221,7 +222,7 @@ export default function CareAppointments() {
                   return (
                     <tr key={a._id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm font-medium text-blue-600">{a.appointmentId}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900">{a.time}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900">{a.time || '—'}</td>
                       <td className="px-4 py-3 text-sm text-gray-900">
                         {patientName(a)}
                         {isRequest && a.complaint && (

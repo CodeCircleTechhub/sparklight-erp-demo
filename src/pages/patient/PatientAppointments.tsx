@@ -116,11 +116,11 @@ export default function PatientAppointments() {
                       <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-gray-600">
                         <span className="flex items-center gap-1.5">
                           <Calendar className="w-4 h-4" />
-                          {fmtDate(appt.date)}
+                          {appt.date ? fmtDate(appt.date) : 'Date & time to be confirmed'}
                         </span>
                         <span className="flex items-center gap-1.5">
                           <Clock className="w-4 h-4" />
-                          {appt.time}
+                          {appt.date ? appt.time : ''}
                         </span>
                         {appt.appointmentId && (
                           <span className="flex items-center gap-1.5 text-gray-400">

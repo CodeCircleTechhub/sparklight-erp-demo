@@ -71,8 +71,6 @@ export default function PatientDashboard() {
     category: 'Service',
   });
   const [requestForm, setRequestForm] = useState({
-    date: '',
-    time: '',
     type: 'Consultation',
     complaint: '',
   });
@@ -128,15 +126,15 @@ export default function PatientDashboard() {
 
   const submitRequest = async (e: FormEvent) => {
     e.preventDefault();
-    if (!requestForm.date || !requestForm.complaint.trim()) {
-      setNotice({ kind: 'err', text: 'Pick a date and tell us what you need seen for.' });
+    if (!requestForm.complaint.trim()) {
+      setNotice({ kind: 'err', text: 'Tell us what you need seen for.' });
       return;
     }
     setSaving('request');
     setNotice(null);
     try {
       const { data } = await api.post('/patient/appointments', requestForm);
-      setRequestForm({ date: '', time: '', type: 'Consultation', complaint: '' });
+      setRequestForm({ type: 'Consultation', complaint: '' });
       setShowRequestForm(false);
       setNotice({ kind: 'ok', text: data.message || 'Appointment request sent' });
       await loadPatientRequests();
@@ -371,26 +369,6 @@ export default function PatientDashboard() {
 
             {showRequestForm && (
               <form onSubmit={submitRequest} className="space-y-3 mb-5 p-4 bg-gray-50 rounded-lg border border-gray-100">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Preferred date</label>
-                    <input
-                      type="date"
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      value={requestForm.date}
-                      onChange={(e) => setRequestForm({ ...requestForm, date: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Preferred time</label>
-                    <input
-                      type="time"
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      value={requestForm.time}
-                      onChange={(e) => setRequestForm({ ...requestForm, time: e.target.value })}
-                    />
-                  </div>
-                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
                   <select
@@ -414,7 +392,7 @@ export default function PatientDashboard() {
                   />
                 </div>
                 <p className="text-xs text-gray-500">
-                  Customer care reviews first, then the manager assigns a doctor or nurse.
+                  Send your request and our management team will pick a date, time and clinician for you.
                 </p>
                 <button
                   type="submit"
@@ -434,7 +412,9 @@ export default function PatientDashboard() {
                 {requests.slice(0, 4).map((r) => (
                   <li key={r._id} className="p-3 rounded-lg border border-gray-100 bg-gray-50/60">
                     <div className="flex items-start justify-between gap-3">
-                      <p className="text-sm font-medium text-gray-900">{fmtDate(r.date)} {r.time}</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {r.date ? `${fmtDate(r.date)} ${r.time}` : 'Date & time to be confirmed'}
+                      </p>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${requestBadge[r.status] || 'bg-gray-100 text-gray-600'}`}>
                         {requestLabel[r.status] || r.status}
                       </span>

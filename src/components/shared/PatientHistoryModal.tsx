@@ -271,6 +271,9 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
   const nursingNotes: any[] = useMemo(() => data?.nursingNotes || [], [data]);
   const followUps: any[] = useMemo(() => data?.followUps || [], [data]);
   const timeline: any[] = useMemo(() => data?.timeline || [], [data]);
+  // appointments come newest-first; the first one is the patient's last appointment
+  const appointments: any[] = useMemo(() => data?.appointments || [], [data]);
+  const lastAppointment = appointments[0] || null;
 
   // full-history filtering (find any entry without scrolling forever)
   const [histQuery, setHistQuery] = useState('');
@@ -1057,6 +1060,44 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
                       </div>
                     </div>
                   </div>
+
+                  {lastAppointment && (
+                    <div className="rounded-xl border border-gray-200 p-4">
+                      <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-3">
+                        <CalendarClock className="w-4 h-4 text-teal-600" />
+                        Last appointment
+                      </h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-2 text-sm">
+                        <span className="text-gray-500">Date</span>
+                        <span className="text-gray-900 font-medium">
+                          {fmtDateTime(lastAppointment.date)}
+                          {lastAppointment.time ? ` · ${lastAppointment.time}` : ''}
+                        </span>
+                        <span className="text-gray-500">Attended by</span>
+                        <span className="text-gray-900 font-medium">
+                          {lastAppointment.assignedTo?.fullName ||
+                            lastAppointment.assignedToName ||
+                            lastAppointment.doctor?.fullName ||
+                            lastAppointment.doctorName ||
+                            '—'}
+                          {(lastAppointment.assignedTo?.role || lastAppointment.doctor?.role) && (
+                            <span className="block text-[11px] font-normal text-gray-400">
+                              {lastAppointment.assignedTo?.role || lastAppointment.doctor?.role}
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-gray-500">Type</span>
+                        <span className="text-gray-900">{lastAppointment.type || '—'}</span>
+                        <span className="text-gray-500">Status</span>
+                        <span className="text-gray-900">{lastAppointment.status || '—'}</span>
+                      </div>
+                      {(lastAppointment.complaint || lastAppointment.notes) && (
+                        <p className="mt-3 text-xs text-gray-500">
+                          {lastAppointment.complaint || lastAppointment.notes}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

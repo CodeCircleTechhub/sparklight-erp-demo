@@ -90,7 +90,7 @@ export default function ManagerAppointments() {
   const [requestsLoading, setRequestsLoading] = useState(true);
   const [clinicians, setClinicians] = useState<DoctorRef[]>([]);
   const [decidingId, setDecidingId] = useState<string | null>(null);
-  const [assignForm, setAssignForm] = useState({ assignedTo: '', note: '' });
+  const [assignForm, setAssignForm] = useState({ assignedTo: '', date: '', time: '', note: '' });
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [actionBusy, setActionBusy] = useState(false);
@@ -125,6 +125,14 @@ export default function ManagerAppointments() {
       setPanelError('Choose an active doctor or nurse to assign');
       return;
     }
+    if (!assignForm.date) {
+      setPanelError('Pick the appointment date');
+      return;
+    }
+    if (!assignForm.time) {
+      setPanelError('Pick the appointment time');
+      return;
+    }
     setActionBusy(true);
     setPanelError(null);
     setPanelOk('');
@@ -132,7 +140,7 @@ export default function ManagerAppointments() {
       const { data } = await api.put(`/appointments/${id}/approve`, assignForm);
       setPanelOk(data.message || 'Request approved');
       setDecidingId(null);
-      setAssignForm({ assignedTo: '', note: '' });
+      setAssignForm({ assignedTo: '', date: '', time: '', note: '' });
       await Promise.all([fetchRequests(), fetchAppointments()]);
     } catch (err: any) {
       setPanelError(err.response?.data?.message || 'Failed to approve request');
@@ -186,7 +194,7 @@ export default function ManagerAppointments() {
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">Patient appointment requests</h2>
-              <p className="text-sm text-gray-500 mt-0.5">Review the complaint, assign a nurse or doctor, then approve.</p>
+              <p className="text-sm text-gray-500 mt-0.5">Review the complaint, pick the date &amp; time, assign a nurse or doctor, then approve.</p>
             </div>
             <span className="text-xs font-medium bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full w-fit shrink-0">
               {requests.length} waiting
@@ -289,6 +297,26 @@ export default function ManagerAppointments() {
                                 </option>
                               ))}
                             </select>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Appointment date *</label>
+                              <input
+                                type="date"
+                                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={assignForm.date}
+                                onChange={(e) => setAssignForm({ ...assignForm, date: e.target.value })}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Appointment time *</label>
+                              <input
+                                type="time"
+                                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={assignForm.time}
+                                onChange={(e) => setAssignForm({ ...assignForm, time: e.target.value })}
+                              />
+                            </div>
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-gray-600 mb-1">Note for the patient (optional)</label>

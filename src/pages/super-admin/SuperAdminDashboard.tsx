@@ -76,6 +76,7 @@ export default function SuperAdminDashboard() {
   const [rxSales, setRxSales] = useState<any>(null);
   const [discharges, setDischarges] = useState<any[]>([]);
   const [regChart, setRegChart] = useState<{ label: string; value: number }[]>([]);
+  const [apptStats, setApptStats] = useState<{ today: number; week: number; month: number; list: any[] }>({ today: 0, week: 0, month: 0, list: [] });
 
   const quickActions = [
     { label: 'Register Patient', icon: UserPlus, color: 'bg-blue-500 hover:bg-blue-600', path: '/admin/patients/register' },
@@ -107,6 +108,33 @@ export default function SuperAdminDashboard() {
         setAdmStats(admissionsRes.data || {});
         setDischarges((dischargesRes.data.items || []).slice(0, 5));
         setRxSales(rxSalesRes.data || null);
+
+        // appointment totals per day / week / month + who booked with which doctor
+        const apptList: any[] = appointmentsRes.data.appointments || [];
+        const startToday = new Date();
+        startToday.setHours(0, 0, 0, 0);
+        const startTomorrow = new Date(startToday);
+        startTomorrow.setDate(startTomorrow.getDate() + 1);
+        const startWeek = new Date(startToday);
+        startWeek.setDate(startWeek.getDate() - ((startWeek.getDay() + 6) % 7)); // Monday
+        const endWeek = new Date(startWeek);
+        endWeek.setDate(endWeek.getDate() + 7);
+        const startMonth = new Date(startToday.getFullYear(), startToday.getMonth(), 1);
+        const endMonth = new Date(startMonth);
+        endMonth.setMonth(endMonth.getMonth() + 1);
+        const inRange = (d: any, from: Date, to: Date) => {
+          if (!d) return false;
+          const t = new Date(d).getTime();
+          return t >= from.getTime() && t < to.getTime();
+        };
+        // pending requests carry no date (they sort last server-side), so surface them first
+        const pendingRequests = apptList.filter((a) => a.status === 'Requested');
+        setApptStats({
+          today: apptList.filter((a) => inRange(a.date, startToday, startTomorrow)).length,
+          week: apptList.filter((a) => inRange(a.date, startWeek, endWeek)).length,
+          month: apptList.filter((a) => inRange(a.date, startMonth, endMonth)).length,
+          list: [...pendingRequests, ...apptList.filter((a) => a.status !== 'Requested')].slice(0, 8),
+        });
 
         const totalPatients = patientsRes.data.total ?? 0;
         const activeStaff = (usersRes.data.users || [])
@@ -236,6 +264,71 @@ export default function SuperAdminDashboard() {
           )}
         </div>
       )}
+
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-blue-500" />
+            Appointments
+          </h2>
+          <p className="text-sm text-gray-500">
+            Today <strong className="text-gray-900">{apptStats.today}</strong>
+            <span className="mx-2 text-gray-300">|</span>
+            This week <strong className="text-gray-900">{apptStats.week}</strong>
+            <span className="mx-2 text-gray-300">|</span>
+            This month <strong className="text-gray-900">{apptStats.month}</strong>
+          </p>
+        </div>
+        {apptStats.list.length === 0 ? (
+          <p className="text-sm text-gray-400">No appointments recorded yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="py-2 pr-4">Patient</th>
+                  <th className="py-2 pr-4">Doctor / Attending</th>
+                  <th className="py-2 pr-4">Date</th>
+                  <th className="py-2">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {apptStats.list.map((a: any) => (
+                  <tr key={a._id}>
+                    <td className="py-2.5 pr-4 font-medium text-gray-900">
+                      {[a.patient?.firstName, a.patient?.surname].filter(Boolean).join(' ') || a.patientName || '—'}
+                    </td>
+                    <td className="py-2.5 pr-4 text-gray-700">
+                      {a.assignedTo?.fullName || a.doctor?.fullName || a.assignedToName || '—'}
+                    </td>
+                    <td className="py-2.5 pr-4 text-gray-500">
+                      {a.date
+                        ? new Date(a.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                        : 'To be set'}
+                      {a.date && a.time ? ` · ${a.time}` : ''}
+                    </td>
+                    <td className="py-2.5">
+                      <span
+                        className={`text-[10px] font-medium px-2 py-1 rounded-full ${
+                          a.status === 'Completed'
+                            ? 'bg-green-100 text-green-700'
+                            : a.status === 'Requested'
+                              ? 'bg-amber-100 text-amber-700'
+                              : a.status === 'Cancelled' || a.status === 'Rejected'
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-blue-100 text-blue-700'
+                        }`}
+                      >
+                        {a.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       <EmergencyPanel canRemove />
 
