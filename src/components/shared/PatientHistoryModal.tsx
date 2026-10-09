@@ -32,6 +32,8 @@ import {
   Check,
   AlertTriangle,
   FileCheck,
+  Scissors,
+  Pencil,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
@@ -56,6 +58,7 @@ type TabKey =
   | 'diagnoses'
   | 'records'
   | 'vitals'
+  | 'surgery'
   | 'prescriptions'
   | 'tests'
   | 'billing'
@@ -78,6 +81,8 @@ const PHARM_ROLES = ['super-admin', 'manager', 'pharmacist'];
 const EDIT_PT_ROLES = ['super-admin', 'manager', 'receptionist', 'customer-care', 'senior-customer-care'];
 const EMG_MARK_ROLES = ['super-admin', 'manager', 'receptionist', 'customer-care', 'senior-customer-care', 'doctor', 'nurse'];
 const EMG_REMOVE_ROLES = ['super-admin', 'manager', 'receptionist', 'customer-care', 'senior-customer-care', 'doctor', 'nurse'];
+// surgery button + notes: clinicians only (matches backend WRITE_ROLES)
+const SURGERY_ROLES = ['super-admin', 'manager', 'doctor', 'nurse'];
 const PHARMACY_TABS = ['overview', 'prescriptions', 'billing', 'history'];
 
 const kindMeta: Record<string, { label: string; className: string }> = {
@@ -246,6 +251,14 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
   const [resultText, setResultText] = useState('');
   const [resultNotes, setResultNotes] = useState('');
 
+  // surgery tab: toggle flag + running notes (notes lock after 24 hours)
+  const [surgery, setSurgery] = useState<{ active: boolean; at?: string | null; by?: string }>({ active: false });
+  const [surgeryNotes, setSurgeryNotes] = useState<any[]>([]);
+  const [surgeryDraft, setSurgeryDraft] = useState('');
+  const [surgeryEditId, setSurgeryEditId] = useState<string | null>(null);
+  const [surgeryEditDraft, setSurgeryEditDraft] = useState('');
+  const [surgeryBusy, setSurgeryBusy] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -262,6 +275,21 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
   useEffect(() => {
     load();
   }, [load]);
+
+  // surgery status + notes load with the chart so the header badge is always current
+  const loadSurgery = useCallback(async () => {
+    try {
+      const { data } = await api.get('/surgery/records', { params: { patient: patientId } });
+      setSurgery(data.surgery || { active: false });
+      setSurgeryNotes(data.notes || []);
+    } catch {
+      /* surgery tab stays empty if it cannot load */
+    }
+  }, [patientId]);
+
+  useEffect(() => {
+    loadSurgery();
+  }, [loadSurgery]);
 
   // Esc closes the chart
   useEffect(() => {
@@ -343,6 +371,7 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
   const canEditPt = EDIT_PT_ROLES.includes(role);
   const canMarkEmergency = EMG_MARK_ROLES.includes(role);
   const canClearEmergency = EMG_REMOVE_ROLES.includes(role);
+  const canSurgery = SURGERY_ROLES.includes(role);
   const canResult = LAB_ROLES.includes(role);
   const canDownloadDocs = ['super-admin', 'manager', 'laboratory', 'doctor'].includes(role) || isNurseRole(rawRole);
   const canDispense = PHARM_ROLES.includes(role);
@@ -398,6 +427,63 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
       setBusy(false);
     }
   };
+
+  // surgery flag: press to start, press again when the procedure is done
+  const toggleSurgery = async () => {
+    const turningOff = surgery.active;
+    if (turningOff && !window.confirm('Mark this patient\'s surgery as done?')) return;
+    setSurgeryBusy(true);
+    setError('');
+    try {
+      const { data } = await api.patch('/surgery/status', { patientId, active: !turningOff });
+      setSurgery(data.surgery || { active: false });
+      flash(turningOff ? 'Surgery marked as done' : 'Patient marked as UNDERGOING SURGERY');
+      onRefresh?.();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Could not update surgery status');
+    } finally {
+      setSurgeryBusy(false);
+    }
+  };
+
+  const saveSurgeryNote = async () => {
+    const note = surgeryDraft.trim();
+    if (!note) return;
+    setSurgeryBusy(true);
+    setError('');
+    try {
+      await api.post('/surgery/notes', { patientId, note });
+      setSurgeryDraft('');
+      flash('Surgery note saved');
+      await loadSurgery();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Could not save surgery note');
+    } finally {
+      setSurgeryBusy(false);
+    }
+  };
+
+  const saveSurgeryEdit = async (id: string) => {
+    const note = surgeryEditDraft.trim();
+    if (!note) return;
+    setSurgeryBusy(true);
+    setError('');
+    try {
+      await api.put(`/surgery/notes/${id}`, { note });
+      setSurgeryEditId(null);
+      setSurgeryEditDraft('');
+      flash('Surgery note updated');
+      await loadSurgery();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Could not update surgery note');
+    } finally {
+      setSurgeryBusy(false);
+    }
+  };
+
+  // notes stop accepting edits 24 hours after they were written
+  const surgeryNoteLocked = (n: any) =>
+    Date.now() - new Date(n.createdAt).getTime() > 24 * 60 * 60 * 1000;
 
   const onSaved = (msg: string) => {
     setForm(null);
@@ -715,6 +801,7 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
     { key: 'consultations', label: 'Consultations', count: consultations.length + diagnoses.length, icon: Stethoscope },
     { key: 'records', label: 'Records', count: records.length, icon: ClipboardList },
     { key: 'vitals', label: 'Vitals & Notes', count: vitals.length + nursingNotes.length, icon: HeartPulse },
+    { key: 'surgery', label: 'Surgery', count: surgeryNotes.length, icon: Scissors },
     { key: 'prescriptions', label: 'Prescriptions', count: prescriptions.length, icon: Pill },
     { key: 'tests', label: 'Tests', count: tests.length, icon: FlaskConical },
     { key: 'billing', label: 'Billing', count: invoices.length, icon: Receipt },
@@ -792,6 +879,14 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {!loading && surgery.active && (
+              <span
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide bg-rose-600 text-white"
+                title={surgery.at ? `Started ${fmtDateTime(surgery.at)}${surgery.by ? ` by ${surgery.by}` : ''}` : 'Undergoing surgery'}
+              >
+                <Scissors className="w-3.5 h-3.5" /> In surgery
+              </span>
+            )}
             {!loading && patient && !patient.emergency && canMarkEmergency && !emgOpen && (
               <button
                 onClick={() => {
@@ -1842,6 +1937,156 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
                       ))
                     )}
                   </div>
+                </div>
+              )}
+
+              {/* ------------------------------------------------ SURGERY */}
+              {tab === 'surgery' && (
+                <div className="space-y-4">
+                  {/* under-surgery toggle — on while in theatre, off when done */}
+                  <div
+                    className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
+                      surgery.active ? 'border-rose-400 bg-rose-50' : 'border-gray-200 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span className={`rounded-lg p-2 ${surgery.active ? 'bg-rose-100' : 'bg-gray-100'}`}>
+                        <Scissors className={`w-4 h-4 ${surgery.active ? 'text-rose-600' : 'text-gray-500'}`} />
+                      </span>
+                      <div>
+                        <p className={`text-sm font-semibold ${surgery.active ? 'text-rose-700' : 'text-gray-700'}`}>
+                          {surgery.active ? 'Patient is undergoing surgery' : 'Patient is not in surgery'}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {surgery.active
+                            ? [`Started ${surgery.at ? fmtDateTime(surgery.at) : ''}`, surgery.by]
+                                .filter(Boolean)
+                                .join(' · ')
+                            : 'Press the button while the patient is in theatre, press it again when done.'}
+                        </p>
+                      </div>
+                    </div>
+                    {canSurgery && (
+                      <button
+                        onClick={toggleSurgery}
+                        disabled={surgeryBusy}
+                        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white transition-colors disabled:opacity-50 ${
+                          surgery.active
+                            ? 'bg-emerald-600 hover:bg-emerald-700'
+                            : 'bg-rose-600 hover:bg-rose-700'
+                        }`}
+                      >
+                        {surgeryBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Scissors className="w-4 h-4" />}
+                        {surgery.active ? 'Surgery done' : 'Start surgery'}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* write a note */}
+                  <div className="space-y-2">
+                    <TabHead
+                      title="Surgery notes"
+                      hint="Everything happening during the procedure. Notes can be edited for 24 hours, then they lock."
+                    />
+                    {canSurgery ? (
+                      <div className="rounded-xl border border-gray-200 p-4 space-y-2">
+                        <textarea
+                          value={surgeryDraft}
+                          onChange={(e) => setSurgeryDraft(e.target.value)}
+                          rows={3}
+                          placeholder="e.g. anaesthesia started, incision made, patient stable..."
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <div className="flex justify-end">
+                          <button
+                            onClick={saveSurgeryNote}
+                            disabled={surgeryBusy || !surgeryDraft.trim()}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            {surgeryBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                            Save note
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400">
+                        Only doctors, nurses and managers can write surgery notes.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* saved notes */}
+                  {surgeryNotes.length === 0 ? (
+                    <p className="py-4 text-center text-sm text-gray-500">No surgery notes yet.</p>
+                  ) : (
+                    surgeryNotes.map((n) => {
+                      const locked = surgeryNoteLocked(n);
+                      const editing = surgeryEditId === n._id;
+                      return (
+                        <div key={n._id} className="rounded-xl border border-gray-200 p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-xs font-semibold text-gray-700">{n.noteBy || 'Staff'}</p>
+                            <span className="text-xs text-gray-400">{fmtDateTime(n.createdAt)}</span>
+                          </div>
+                          {editing ? (
+                            <div className="mt-2 space-y-2">
+                              <textarea
+                                value={surgeryEditDraft}
+                                onChange={(e) => setSurgeryEditDraft(e.target.value)}
+                                rows={3}
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  onClick={() => {
+                                    setSurgeryEditId(null);
+                                    setSurgeryEditDraft('');
+                                  }}
+                                  disabled={surgeryBusy}
+                                  className="px-3 py-1.5 rounded-lg border border-gray-300 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={() => saveSurgeryEdit(n._id)}
+                                  disabled={surgeryBusy || !surgeryEditDraft.trim()}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-50"
+                                >
+                                  {surgeryBusy ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <Save className="w-3.5 h-3.5" />
+                                  )}
+                                  Save
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-800 whitespace-pre-wrap mt-1">{n.note}</p>
+                          )}
+                          {canSurgery && !editing && (
+                            <div className="mt-2">
+                              {locked ? (
+                                <span className="inline-flex items-center gap-1 text-xs text-gray-400">
+                                  <Lock className="w-3.5 h-3.5" /> Locked — the 24-hour edit window has passed
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setSurgeryEditId(n._id);
+                                    setSurgeryEditDraft(n.note || '');
+                                  }}
+                                  className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" /> Edit
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               )}
 
