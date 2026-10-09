@@ -34,6 +34,7 @@ const fmtDate = (d?: string | null) =>
     : '—';
 
 const statusColors: Record<string, string> = {
+  Pending: 'bg-amber-100 text-amber-800',
   Completed: 'bg-green-100 text-green-800',
   'In Progress': 'bg-blue-100 text-blue-800',
   Scheduled: 'bg-yellow-100 text-yellow-800',

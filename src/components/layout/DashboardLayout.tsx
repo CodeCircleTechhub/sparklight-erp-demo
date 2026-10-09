@@ -4,6 +4,8 @@ import { Menu, Bell, LogOut, MessageSquare, ChevronDown, Loader2, CheckCheck } f
 import Sidebar from './Sidebar';
 import { useAuth } from '../../contexts/AuthContext';
 import { getDashboardRoute } from '../../utils/dashboardRoutes';
+import { isNurseRole, portalRole } from '../../lib/roles';
+import { playNotificationSound } from '../../lib/notificationSound';
 import api from '../../services/api';
 import { onSocketEvent, connectSocket } from '../../services/socket';
 
@@ -31,11 +33,15 @@ export default function DashboardLayout({ role }: DashboardLayoutProps) {
   const isFrontDeskPair =
     FRONT_DESK.includes(userRole) &&
     (routeRole === 'receptionist' || routeRole === 'customer-care');
-  // senior-customer-care shares the customer-care portal routes
+  // senior-customer-care shares the customer-care portal routes;
+  // every nursing rank (nurse / head-nurse / assistant-head-nurse / matron)
+  // shares the nurse portal routes
   const effectiveRole =
     userRole === 'senior-customer-care' && routeRole === 'customer-care'
       ? 'customer-care'
-      : userRole;
+      : isNurseRole(userRole)
+        ? 'nurse'
+        : userRole;
   const isRoleMismatch = !!user && !!userRole && !isFrontDeskPair && effectiveRole !== routeRole;
 
   const notifPath = userRole === 'patient' ? '/patient/notifications' : '/system/notifications';
@@ -51,7 +57,9 @@ export default function DashboardLayout({ role }: DashboardLayoutProps) {
   }, [notifPath]);
 
   // notifications: load when the dashboard opens ("when they come online"),
-  // refresh periodically, and push instantly over the realtime socket
+  // refresh periodically, and push instantly over the realtime socket —
+  // a chime plays whenever a NEW notification arrives (requirement: sound
+  // on the notification bell)
   useEffect(() => {
     if (!user) return;
     connectSocket();
@@ -60,13 +68,25 @@ export default function DashboardLayout({ role }: DashboardLayoutProps) {
     const timer = setInterval(fetchNotifications, 20000);
     const onFocus = () => fetchNotifications();
     window.addEventListener('focus', onFocus);
-    const off = onSocketEvent('notification', () => fetchNotifications());
+    const off = onSocketEvent('notification', () => {
+      playNotificationSound();
+      fetchNotifications();
+    });
     return () => {
       clearInterval(timer);
       window.removeEventListener('focus', onFocus);
       off();
     };
   }, [user, fetchNotifications]);
+
+  // polling fallback: chime when the unread count grows (skips first load)
+  const prevUnread = useRef<number | null>(null);
+  useEffect(() => {
+    if (prevUnread.current !== null && unread > prevUnread.current) {
+      playNotificationSound();
+    }
+    prevUnread.current = unread;
+  }, [unread]);
 
   useEffect(() => {
     if (!showDropdown && !showNotifications) return;
@@ -129,7 +149,7 @@ export default function DashboardLayout({ role }: DashboardLayoutProps) {
   }
 
   if (isRoleMismatch) {
-    const target = getDashboardRoute(userRole);
+    const target = getDashboardRoute(portalRole(userRole));
     return <Navigate to={target} replace />;
   }
 
@@ -234,7 +254,7 @@ export default function DashboardLayout({ role }: DashboardLayoutProps) {
                     )}
                   </div>
                   <Link
-                    to={userRole === 'patient' ? '/patient/notifications' : getDashboardRoute(userRole as UserRole).replace('/dashboard', '/notifications')}
+                    to={userRole === 'patient' ? '/patient/notifications' : getDashboardRoute(portalRole(userRole) as UserRole).replace('/dashboard', '/notifications')}
                     onClick={() => setShowNotifications(false)}
                     className="block text-center text-xs font-medium text-blue-600 hover:text-blue-700 py-2.5 border-t border-gray-100"
                   >

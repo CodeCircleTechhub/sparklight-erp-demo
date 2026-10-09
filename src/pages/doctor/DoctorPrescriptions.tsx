@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageComponents';
 import { useAuth } from '../../contexts/AuthContext';
+import { canPrescribe } from '../../lib/roles';
 import api from '../../services/api';
 
 type Med = { name: string; dosage: string; frequency: string; duration: string; instructions: string };
@@ -46,6 +47,8 @@ const prescriberOf = (rx: Rx) =>
 export default function DoctorPrescriptions() {
   const { user } = useAuth();
   const privileged = user?.role === 'super-admin' || user?.role === 'manager';
+  // bedside nurses may view/dispense but only nursing leadership may prescribe
+  const mayPrescribe = canPrescribe(user?.role);
 
   const [items, setItems] = useState<Rx[]>([]);
   const [patients, setPatients] = useState<any[]>([]);
@@ -298,13 +301,15 @@ export default function DoctorPrescriptions() {
               className={field}
             />
           </div>
-          <button
-            onClick={openForm}
-            className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
-          >
-            <Plus className="w-4 h-4" />
-            {activePatient ? `Prescribe for ${activePatient.name}` : 'New prescription'}
-          </button>
+          {mayPrescribe && (
+            <button
+              onClick={openForm}
+              className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+            >
+              <Plus className="w-4 h-4" />
+              {activePatient ? `Prescribe for ${activePatient.name}` : 'New prescription'}
+            </button>
+          )}
           {selectedPatient && (
             <button
               onClick={() => selectPatient('')}
@@ -339,13 +344,19 @@ export default function DoctorPrescriptions() {
           <h2 className="text-sm font-semibold text-gray-700">
             {activePatient ? `Prescriptions for ${activePatient.name}` : 'Prescriptions issued'}
           </h2>
-          <button
-            onClick={() => (showForm ? setShowForm(false) : openForm())}
-            className="inline-flex items-center gap-2 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-700"
-          >
-            <Plus className="w-4 h-4" />
-            New prescription
-          </button>
+          {mayPrescribe ? (
+            <button
+              onClick={() => (showForm ? setShowForm(false) : openForm())}
+              className="inline-flex items-center gap-2 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-700"
+            >
+              <Plus className="w-4 h-4" />
+              New prescription
+            </button>
+          ) : (
+            <span className="text-xs text-gray-400">
+              Prescribing is limited to head nurse, assistant head nurse &amp; matron
+            </span>
+          )}
         </div>
 
         {showForm && (

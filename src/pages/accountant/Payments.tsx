@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { CreditCard, CalendarDays, Calendar, DollarSign, MoreVertical, Loader2, AlertCircle } from 'lucide-react';
+import { CreditCard, CalendarDays, Calendar, DollarSign, Eye, Loader2, AlertCircle } from 'lucide-react';
 import { PageHeader, StatusBadge } from '../../components/ui/PageComponents';
+import PatientPaymentsModal from '../../components/billing/PatientPaymentsModal';
 import api from '../../services/api';
 
 const money = (n: number) => '₦' + Number(n || 0).toLocaleString();
@@ -17,10 +18,18 @@ const getStatusColor = (status: string) => {
   }
 };
 
+const patientLabel = (p: any) =>
+  p.patient
+    ? [p.patient.firstName, p.patient.surname].filter(Boolean).join(' ') || p.patient.patientId
+    : p.patientName || '—';
+
+const patientIdOf = (p: any) => p.patient?._id || p.patient || '';
+
 export default function Payments() {
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [viewRow, setViewRow] = useState<any | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -96,17 +105,22 @@ export default function Payments() {
                 {payments.map((p) => (
                   <tr key={p._id || p.paymentId} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                     <td className="px-5 py-4 text-sm font-medium text-[#3b82f6]">{p.paymentId}</td>
-                    <td className="px-5 py-4 text-sm text-gray-900">
-                      {p.patient
-                        ? [p.patient.firstName, p.patient.surname].filter(Boolean).join(' ') || p.patient.patientId
-                        : p.patientName || '—'}
-                    </td>
+                    <td className="px-5 py-4 text-sm text-gray-900">{patientLabel(p)}</td>
                     <td className="px-5 py-4 text-sm text-gray-500">{p.reference || '—'}</td>
                     <td className="px-5 py-4 text-sm font-medium text-gray-900">₦{(p.amount || 0).toLocaleString()}</td>
                     <td className="px-5 py-4 text-sm text-gray-500">{p.method}</td>
                     <td className="px-5 py-4 text-sm text-gray-500">{fmtDate(p.date)}</td>
                     <td className="px-5 py-4"><StatusBadge status={p.status} color={getStatusColor(p.status) as any} /></td>
-                    <td className="px-5 py-4"><button className="text-gray-400 hover:text-gray-600"><MoreVertical className="w-4 h-4" /></button></td>
+                    <td className="px-5 py-4">
+                      <button
+                        onClick={() => setViewRow({ patientId: patientIdOf(p), patientName: patientLabel(p) })}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                        title="View all payment records for this patient"
+                        disabled={!patientIdOf(p)}
+                      >
+                        <Eye className="w-3.5 h-3.5" /> View
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {payments.length === 0 && (
@@ -120,6 +134,13 @@ export default function Payments() {
           </div>
         </div>
       </div>
+      {viewRow && viewRow.patientId && (
+        <PatientPaymentsModal
+          patientId={viewRow.patientId}
+          patientName={viewRow.patientName}
+          onClose={() => setViewRow(null)}
+        />
+      )}
     </div>
   );
 }

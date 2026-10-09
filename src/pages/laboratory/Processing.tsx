@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Cog, CheckCircle, Clock, Loader2, AlertCircle, X, FileText, Paperclip, Upload } from 'lucide-react';
+import { Cog, CheckCircle, Clock, Loader2, AlertCircle, X, FileText, Paperclip, Upload, Eye } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageComponents';
+import LabHistoryModal from '../../components/laboratory/LabHistoryModal';
 import api from '../../services/api';
 
 const statusColors: Record<string, string> = {
@@ -33,6 +34,7 @@ export default function Processing() {
   const [modalError, setModalError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
+  const [viewing, setViewing] = useState<any | null>(null);
 
   const ATTACH_EXTS = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg'];
   const MAX_FILE = 10 * 1024 * 1024;
@@ -207,13 +209,23 @@ export default function Processing() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => openResult(t)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#3b82f6] text-white rounded-lg text-xs font-medium hover:bg-blue-600 transition-colors"
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        Enter Result
-                      </button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={() => openResult(t)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#3b82f6] text-white rounded-lg text-xs font-medium hover:bg-blue-600 transition-colors"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          Enter Result
+                        </button>
+                        <button
+                          onClick={() => setViewing(t)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 bg-white text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+                          title="View this patient's full lab history"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          View
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -308,6 +320,15 @@ export default function Processing() {
             </div>
           </div>
         </div>
+      )}
+
+      {viewing && (
+        <LabHistoryModal
+          patientId={viewing.patient?._id || viewing.patient}
+          patientName={patName(viewing)}
+          initialTab="processing"
+          onClose={() => setViewing(null)}
+        />
       )}
     </div>
   );

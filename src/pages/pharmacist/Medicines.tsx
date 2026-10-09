@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Package, AlertTriangle, XCircle, Search, Loader2, AlertCircle, CheckCircle, Plus, Pencil, X } from 'lucide-react';
+import { Package, AlertTriangle, XCircle, Search, Loader2, AlertCircle, CheckCircle, Plus, Pencil, X, DollarSign } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageComponents';
 import api from '../../services/api';
 
@@ -132,6 +132,17 @@ export default function Medicines() {
     { label: 'Active', value: String(activeCount), icon: Package, color: 'text-green-600', bg: 'bg-green-100' },
     { label: 'Low Stock', value: String(counts.lowStock), icon: AlertTriangle, color: 'text-yellow-600', bg: 'bg-yellow-100' },
     { label: 'Expired', value: String(expiredCount), icon: XCircle, color: 'text-red-600', bg: 'bg-red-100' },
+    {
+      label: 'Stock Value',
+      value: naira(
+        medicines
+          .filter((m) => !m.disposedAt)
+          .reduce((s, m) => s + (Number(m.price) || 0) * (Number(m.stock) || 0), 0)
+      ),
+      icon: DollarSign,
+      color: 'text-blue-600',
+      bg: 'bg-blue-100',
+    },
   ];
 
   const field = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
@@ -152,7 +163,7 @@ export default function Medicines() {
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
         {stats.map((stat) => (
           <div key={stat.label} className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="flex items-center gap-3">
@@ -274,15 +285,9 @@ export default function Medicines() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
                 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={field} placeholder="e.g. Amoxicillin 500mg" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                  <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className={field} placeholder="e.g. Antibiotic" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
-                  <input value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} className={field} placeholder="Supplier name" />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className={field} placeholder="e.g. Antibiotic" />
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>

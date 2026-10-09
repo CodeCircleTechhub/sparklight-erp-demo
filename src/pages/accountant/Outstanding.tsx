@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { AlertTriangle, Clock, Calendar, MoreVertical, Loader2, AlertCircle } from 'lucide-react';
+import { AlertTriangle, Clock, Calendar, Eye, Loader2, AlertCircle } from 'lucide-react';
 import { PageHeader, StatusBadge } from '../../components/ui/PageComponents';
+import PatientPaymentsModal from '../../components/billing/PatientPaymentsModal';
 import api from '../../services/api';
 
 const money = (n: number) => '₦' + Number(n || 0).toLocaleString();
@@ -19,6 +20,7 @@ export default function Outstanding() {
   const [totalAmount, setTotalAmount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [viewRow, setViewRow] = useState<any | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -41,6 +43,7 @@ export default function Outstanding() {
     return {
       id: inv.invoiceId,
       patient: inv.patientName || '—',
+      patientId: inv.patient?._id || inv.patient,
       amount: inv.totalAmount || 0,
       dueDate: fmtDate(inv.dueDate || inv.date),
       daysOverdue: days,
@@ -106,7 +109,15 @@ export default function Outstanding() {
                     <td className="px-5 py-4 text-sm text-gray-500">{o.dueDate}</td>
                     <td className="px-5 py-4 text-sm font-medium text-red-600">{o.daysOverdue} days</td>
                     <td className="px-5 py-4"><StatusBadge status={o.status} color={getStatusColor(o.daysOverdue) as any} /></td>
-                    <td className="px-5 py-4"><button className="text-gray-400 hover:text-gray-600"><MoreVertical className="w-4 h-4" /></button></td>
+                    <td className="px-5 py-4">
+                      <button
+                        onClick={() => setViewRow(o)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                        title="View all payment records for this patient"
+                      >
+                        <Eye className="w-3.5 h-3.5" /> View
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {rows.length === 0 && (
@@ -120,6 +131,13 @@ export default function Outstanding() {
           </div>
         </div>
       </div>
+      {viewRow && (
+        <PatientPaymentsModal
+          patientId={viewRow.patientId}
+          patientName={viewRow.patient}
+          onClose={() => setViewRow(null)}
+        />
+      )}
     </div>
   );
 }

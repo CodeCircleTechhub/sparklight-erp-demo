@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Loader2, Plus, Save, Trash2, X } from 'lucide-react';
 import api from '../../../services/api';
 
@@ -108,7 +108,7 @@ export function ConsultationForm({ patientId, initial, onSaved, onFail, onCancel
   const [type, setType] = useState(initial?.consultationType || 'General');
   const [complaint, setComplaint] = useState(initial?.chiefComplaint || '');
   const [notes, setNotes] = useState(initial?.notes || '');
-  const [status, setStatus] = useState(initial?.status || 'Completed');
+  const [status, setStatus] = useState(initial?.status || 'Pending');
   const { busy, err, setErr, run } = useSubmit(onSaved, onFail);
 
   const save = () => {
@@ -154,7 +154,7 @@ export function ConsultationForm({ patientId, initial, onSaved, onFail, onCancel
         <div>
           <label className={LABEL}>Status</label>
           <select value={status} onChange={(e) => setStatus(e.target.value)} className={FIELD}>
-            {['Completed', 'In Progress', 'Scheduled', 'Cancelled'].map((s) => (
+            {['Pending', 'Scheduled', 'In Progress', 'Completed', 'Cancelled'].map((s) => (
               <option key={s}>{s}</option>
             ))}
           </select>
@@ -179,6 +179,27 @@ export function DiagnosisForm({ patientId, initial, onSaved, onFail, onCancel }:
   const [status, setStatus] = useState(initial?.status || 'Active');
   const [notes, setNotes] = useState(initial?.notes || '');
   const { busy, err, setErr, run } = useSubmit(onSaved, onFail);
+
+  // WHO ICD-11 "type of sickness" picker — searched against /doctor/conditions
+  const [sickQuery, setSickQuery] = useState('');
+  const [sickList, setSickList] = useState<{ code: string; title: string }[]>([]);
+  const [showSickList, setShowSickList] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    const timer = window.setTimeout(async () => {
+      try {
+        const { data } = await api.get('/doctor/conditions', { params: { search: sickQuery } });
+        if (alive) setSickList(data.items || []);
+      } catch {
+        if (alive) setSickList([]);
+      }
+    }, 150);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [sickQuery]);
 
   const save = () => {
     if (!diagnosis.trim()) {
@@ -212,9 +233,46 @@ export function DiagnosisForm({ patientId, initial, onSaved, onFail, onCancel }:
       }
     >
       <div className="grid sm:grid-cols-2 gap-3">
-        <div>
+        <div className="relative">
           <label className={LABEL}>Diagnosis *</label>
           <input value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} className={FIELD} placeholder="e.g. Uncomplicated malaria" />
+          <label className={`${LABEL} mt-3`}>Type of sickness (search ICD-11)</label>
+          <input
+            value={sickQuery}
+            onChange={(e) => {
+              setSickQuery(e.target.value);
+              setShowSickList(true);
+            }}
+            onFocus={() => setShowSickList(true)}
+            onBlur={() => window.setTimeout(() => setShowSickList(false), 150)}
+            className={FIELD}
+            placeholder="Search disease type… e.g. malaria, diabetes, asthma"
+          />
+          {showSickList && (
+            <ul className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+              {sickList.length === 0 ? (
+                <li className="px-3 py-2 text-xs text-gray-400">No match — type the diagnosis manually above.</li>
+              ) : (
+                sickList.map((s) => (
+                  <li key={s.code}>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setDiagnosis(s.title);
+                        setSickQuery('');
+                        setShowSickList(false);
+                      }}
+                      className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-blue-50"
+                    >
+                      <span className="text-gray-800">{s.title}</span>
+                      <span className="text-xs font-mono text-gray-400 shrink-0">{s.code}</span>
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          )}
         </div>
         <div>
           <label className={LABEL}>Status</label>

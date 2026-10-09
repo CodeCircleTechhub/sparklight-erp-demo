@@ -80,7 +80,7 @@ const medStatusColors: Record<string, string> = {
 };
 
 const quickActionRoutes: Record<string, string> = {
-  'Record Vital Signs': '/nurse/vital-signs',
+  'Record Vital Signs': '/nurse/patients',
   'View Patient Queue': '/nurse/queue',
   'Nursing Notes': '/nurse/notes',
   'Ward Overview': '/nurse/ward',

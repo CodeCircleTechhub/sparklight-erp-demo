@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { ClipboardList, Clock, Cog, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
+import { ClipboardList, Clock, Cog, CheckCircle, Loader2, AlertCircle, Eye } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageComponents';
+import LabHistoryModal from '../../components/laboratory/LabHistoryModal';
 import api from '../../services/api';
 
 const priorityColors: Record<string, string> = {
@@ -30,6 +31,7 @@ export default function TestRequests() {
   const [stats, setStats] = useState({ total: 0, pending: 0, inProgress: 0, completed: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [viewing, setViewing] = useState<any | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -104,6 +106,7 @@ export default function TestRequests() {
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Priority</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Date</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -123,19 +126,41 @@ export default function TestRequests() {
                       <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[r.status] || 'bg-gray-100 text-gray-700'}`}>
                         {r.status || 'Pending'}
                       </span>
+                      {r.confirmedAt && (
+                        <span className="ml-1.5 inline-flex rounded-full bg-teal-100 text-teal-800 px-2 py-0.5 text-[10px] font-semibold">Confirmed</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => setViewing(r)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 bg-white text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+                        title="View this patient's full lab history"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        View
+                      </button>
                     </td>
                   </tr>
                 ))}
                 {tests.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-sm text-gray-400">No test requests yet</td>
+                    <td colSpan={8} className="py-8 text-center text-sm text-gray-400">No test requests yet</td>
                   </tr>
                 )}
               </tbody>
             </table>
-          )}
+            )}
+          </div>
         </div>
-      </div>
+
+      {viewing && (
+        <LabHistoryModal
+          patientId={viewing.patient?._id || viewing.patient}
+          patientName={patName(viewing)}
+          initialTab="requests"
+          onClose={() => setViewing(null)}
+        />
+      )}
     </div>
   );
 }

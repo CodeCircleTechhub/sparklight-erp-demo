@@ -92,9 +92,9 @@ import CareDischargedPatients from './pages/customer-care/DischargedPatients';
 
 // Nurse Pages
 import NurseDashboard from './pages/nurse/NurseDashboard';
-import MyPatients from './pages/nurse/MyPatients';
+import AllPatients from './pages/nurse/AllPatients';
+import OutPatients from './pages/nurse/OutPatients';
 import PatientQueue from './pages/nurse/PatientQueue';
-import VitalSigns from './pages/nurse/VitalSigns';
 import NursingNotes from './pages/nurse/NursingNotes';
 import NurseAdmissions from './pages/nurse/NurseAdmissions';
 import MedicationTasks from './pages/nurse/MedicationTasks';
@@ -117,6 +117,7 @@ import Discharge from './pages/doctor/Discharge';
 
 // Shared Pages
 import WardAllocation from './pages/shared/WardAllocation';
+import AntenatalPage from './pages/shared/AntenatalPage';
 
 // Laboratory Pages
 import LaboratoryDashboard from './pages/laboratory/LaboratoryDashboard';
@@ -320,10 +321,10 @@ function AppRoutes() {
       {/* Nurse Routes */}
       <Route path="/nurse" element={<DashboardLayout role="nurse" />}>
         <Route path="dashboard" element={<NurseDashboard />} />
-        <Route path="patients" element={<MyPatients />} />
-        <Route path="my-patients" element={<MyPatients />} />
+        <Route path="patients" element={<AllPatients />} />
+        <Route path="out-patients" element={<OutPatients />} />
+        <Route path="antenatal" element={<AntenatalPage />} />
         <Route path="queue" element={<PatientQueue />} />
-        <Route path="vital-signs" element={<VitalSigns />} />
         <Route path="notes" element={<NursingNotes />} />
         <Route path="admissions" element={<NurseAdmissions />} />
         <Route path="ward" element={<WardAllocation />} />
@@ -347,6 +348,7 @@ function AppRoutes() {
         <Route path="lab-requests" element={<LabRequests />} />
         <Route path="imaging" element={<ImagingRequests />} />
         <Route path="follow-ups" element={<FollowUps />} />
+        <Route path="antenatal" element={<AntenatalPage />} />
         <Route path="admission" element={<WardAllocation />} />
         <Route path="admissions" element={<DoctorAdmission />} />
         <Route path="discharge" element={<Discharge />} />
@@ -391,6 +393,7 @@ function AppRoutes() {
         <Route path="billing" element={<Billing />} />
         <Route path="invoices" element={<AccountantInvoices />} />
         <Route path="payments" element={<AccountantPayments />} />
+        <Route path="medicines" element={<Medicines />} />
         <Route path="outstanding" element={<Outstanding />} />
         <Route path="receipts" element={<Receipts />} />
         <Route path="refunds" element={<Refunds />} />

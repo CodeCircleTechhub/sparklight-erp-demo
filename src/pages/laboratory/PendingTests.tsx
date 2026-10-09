@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Clock, AlertTriangle, Loader, Loader2, AlertCircle, CheckCircle, PlayCircle } from 'lucide-react';
+import { Clock, AlertTriangle, Loader, Loader2, AlertCircle, CheckCircle, PlayCircle, Eye, ShieldCheck } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageComponents';
+import LabHistoryModal from '../../components/laboratory/LabHistoryModal';
 import api from '../../services/api';
 
 const priorityColors: Record<string, string> = {
@@ -30,6 +31,7 @@ export default function PendingTests() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [busyId, setBusyId] = useState('');
+  const [viewing, setViewing] = useState<any | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -65,8 +67,24 @@ export default function PendingTests() {
     }
   };
 
-  const urgent = tests.filter((t) => t.status === 'Pending' && (t.priority === 'Urgent' || t.priority === 'STAT')).length;
+  // lab approves one particular test request — status stays Pending until it
+  // is collected or moved to processing, so each test keeps its own button
+  const confirmTest = async (t: any) => {
+    if (busyId) return;
+    setBusyId(t._id);
+    setNotice(null);
+    try {
+      await api.post(`/laboratory/${t._id}/confirm`);
+      setNotice({ type: 'ok', text: `${t.testId || 'Test'} confirmed / approved.` });
+      await load();
+    } catch (err: any) {
+      setNotice({ type: 'err', text: err.response?.data?.message || 'Failed to confirm test' });
+    } finally {
+      setBusyId('');
+    }
+  };
 
+  const urgent = tests.filter((t) => t.status === 'Pending' && (t.priority === 'Urgent' || t.priority === 'STAT')).length;
   const cards = [
     { label: 'Waiting', value: String(counts.pending), icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-100' },
     { label: 'In Progress', value: String(counts.inProgress), icon: Loader, color: 'text-blue-600', bg: 'bg-blue-100' },
@@ -148,20 +166,46 @@ export default function PendingTests() {
                       <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[t.status] || 'bg-gray-100 text-gray-700'}`}>
                         {t.status}
                       </span>
+                      {t.confirmedAt && (
+                        <span className="ml-1.5 inline-flex items-center gap-1 rounded-full bg-teal-100 text-teal-800 px-2 py-0.5 text-[10px] font-semibold">
+                          Confirmed
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
-                      {t.status === 'Pending' ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {t.status === 'Pending' && !t.confirmedAt && (
+                          <button
+                            onClick={() => confirmTest(t)}
+                            disabled={!!busyId}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white rounded-lg text-xs font-medium hover:bg-teal-700 transition-colors disabled:opacity-60"
+                            title="Approve / confirm this particular test"
+                          >
+                            {busyId === t._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                            Confirm
+                          </button>
+                        )}
+                        {t.status === 'Pending' ? (
+                          <button
+                            onClick={() => startProcessing(t)}
+                            disabled={!!busyId}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#3b82f6] text-white rounded-lg text-xs font-medium hover:bg-blue-600 transition-colors disabled:opacity-60"
+                          >
+                            {busyId === t._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
+                            Start Processing
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-400">In lab</span>
+                        )}
                         <button
-                          onClick={() => startProcessing(t)}
-                          disabled={!!busyId}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#3b82f6] text-white rounded-lg text-xs font-medium hover:bg-blue-600 transition-colors disabled:opacity-60"
+                          onClick={() => setViewing(t)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 bg-white text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+                          title="View all lab history for this patient"
                         >
-                          {busyId === t._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
-                          Start Processing
+                          <Eye className="w-3.5 h-3.5" />
+                          View
                         </button>
-                      ) : (
-                        <span className="text-xs text-gray-400">In lab</span>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -175,6 +219,15 @@ export default function PendingTests() {
           )}
         </div>
       </div>
+
+      {viewing && (
+        <LabHistoryModal
+          patientId={viewing.patient?._id || viewing.patient}
+          patientName={patName(viewing)}
+          initialTab="pending"
+          onClose={() => setViewing(null)}
+        />
+      )}
     </div>
   );
 }

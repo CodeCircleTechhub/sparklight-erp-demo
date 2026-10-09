@@ -314,12 +314,19 @@ export default function LabRequests() {
                           Completed
                         </button>
                       ) : (
-                        <span
-                          className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[r.status] || 'bg-gray-100 text-gray-600'} opacity-60`}
-                          title="Not done yet"
-                        >
-                          {r.status}
-                        </span>
+                        <>
+                          <span
+                            className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[r.status] || 'bg-gray-100 text-gray-600'} opacity-60`}
+                            title="Not done yet"
+                          >
+                            {r.status}
+                          </span>
+                          {r.confirmedAt && (
+                            <span className="ml-1.5 inline-flex rounded-full bg-teal-100 text-teal-800 px-2 py-0.5 text-[10px] font-semibold">
+                              Confirmed
+                            </span>
+                          )}
+                        </>
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600 max-w-[220px]">

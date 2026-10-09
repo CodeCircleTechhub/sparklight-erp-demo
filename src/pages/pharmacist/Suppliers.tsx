@@ -11,7 +11,7 @@ const statusColors: Record<string, string> = {
 const fmtDate = (d?: string | null) =>
   d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
-const emptyForm = { name: '', contactPerson: '', email: '', phone: '', address: '', products: '', status: 'Active', notes: '' };
+const emptyForm = { name: '', contactPerson: '', email: '', phone: '', quantity: '', products: '', status: 'Active', notes: '' };
 
 export default function Suppliers() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -63,7 +63,7 @@ export default function Suppliers() {
       contactPerson: s.contactPerson || '',
       email: s.email || '',
       phone: s.phone || '',
-      address: s.address || '',
+      quantity: s.quantity != null ? String(s.quantity) : '',
       products: s.products || '',
       status: s.status || 'Active',
       notes: s.notes || '',
@@ -217,7 +217,7 @@ export default function Suppliers() {
             )}
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Company name *</label>
                 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={field} placeholder="e.g. MediPharm Distributors" />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -232,7 +232,7 @@ export default function Suppliers() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email (optional)</label>
                   <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={field} />
                 </div>
                 <div>
@@ -248,8 +248,8 @@ export default function Suppliers() {
                 <input value={form.products} onChange={(e) => setForm({ ...form, products: e.target.value })} className={field} placeholder="e.g. Antibiotics, Painkillers" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-                <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={field} />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                <input type="number" min={0} value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} className={field} placeholder="0" />
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-5">

@@ -31,10 +31,12 @@ import {
   Scan,
   Check,
   AlertTriangle,
+  FileCheck,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { COMMON_TESTS, IMAGING_TESTS } from '../../lib/clinicalOptions';
+import { portalRole, canPrescribe as canPrescribeRole, isNurseRole } from '../../lib/roles';
 import { downloadLabResultPdf, downloadLabAttachment } from '../../utils/downloadLabFile';
 import {
   ConsultationForm,
@@ -209,6 +211,9 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
   const [customTest, setCustomTest] = useState('');
   const [priority, setPriority] = useState('Normal');
 
+  // Tests tab has two views: Request (raise tests) + Report (results from lab)
+  const [testView, setTestView] = useState<'request' | 'report'>('request');
+
   // result viewer
   const [viewTest, setViewTest] = useState<any>(null);
   const [dlBusy, setDlBusy] = useState(false);
@@ -261,6 +266,27 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
   const tests: any[] = useMemo(() => data?.tests || [], [data]);
   const labTests: any[] = useMemo(() => tests.filter((t) => t.category !== 'Imaging'), [tests]);
   const imgTests: any[] = useMemo(() => tests.filter((t) => t.category === 'Imaging'), [tests]);
+  // lab-reported tests the current user has not opened yet (drives the badge)
+  const reportedTests: any[] = useMemo(
+    () => tests.filter((t) => t.status === 'Completed'),
+    [tests]
+  );
+  const newReportCount: number = useMemo(
+    () => reportedTests.filter((t) => !t.seenByMe).length,
+    [reportedTests]
+  );
+  // reports cleared locally the moment the user opens the Report view
+  const [reportsCleared, setReportsCleared] = useState(false);
+
+  // opening the Report view marks released results as seen (clears the badge)
+  useEffect(() => {
+    if (testView !== 'report' || !tests.length) return;
+    setReportsCleared(true);
+    const unseen = tests.filter((t) => t.status === 'Completed' && !t.seenByMe).map((t) => t._id);
+    if (!unseen.length) return;
+    api.post('/laboratory/seen', { ids: unseen }).catch(() => {});
+  }, [testView, tests]);
+
   const consultations: any[] = useMemo(() => data?.consultations || [], [data]);
   const diagnoses: any[] = useMemo(() => data?.diagnoses || [], [data]);
   const records: any[] = useMemo(() => data?.records || [], [data]);
@@ -292,7 +318,10 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
     });
   }, [timeline, histQuery, histKind]);
 
-  const role = user?.role || '';
+  // every nursing rank (nurse / head-nurse / assistant-head-nurse / matron)
+  // is treated as 'nurse' for tab permissions
+  const role = portalRole(user?.role);
+  const rawRole = user?.role || '';
   const canClin = CLIN_ROLES.includes(role);
   const canNote = NOTE_ROLES.includes(role);
   const canBill = BILL_ROLES.includes(role);
@@ -301,8 +330,10 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
   const canMarkEmergency = EMG_MARK_ROLES.includes(role);
   const canClearEmergency = EMG_REMOVE_ROLES.includes(role);
   const canResult = LAB_ROLES.includes(role);
-  const canDownloadDocs = ['super-admin', 'manager', 'laboratory', 'doctor'].includes(role);
+  const canDownloadDocs = ['super-admin', 'manager', 'laboratory', 'doctor'].includes(role) || isNurseRole(rawRole);
   const canDispense = PHARM_ROLES.includes(role);
+  // "New prescription" only for doctors/managers + nursing leadership
+  const canNewRx = canPrescribeRole(rawRole);
   const isPharmacist = role === 'pharmacist';
   const myId = String(user?.id || '');
   const ctx = data?.context || {};
@@ -446,6 +477,7 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
   };
 
   // laboratory releases a result from inside the chart
+  const [resultFiles, setResultFiles] = useState<File[]>([]);
   const saveResult = async () => {
     if (!resulting || !resultText.trim()) return;
     setBusy(true);
@@ -455,10 +487,24 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
         result: resultText.trim(),
         notes: resultNotes.trim(),
       });
+      // not every result is text — attach any uploaded files (pdf/doc/jpeg)
+      for (const f of resultFiles) {
+        try {
+          const buf = await f.arrayBuffer();
+          await api.post(
+            `/laboratory/${resulting._id}/attachments?name=${encodeURIComponent(f.name)}&mime=${encodeURIComponent(f.type || '')}`,
+            buf,
+            { headers: { 'Content-Type': 'application/octet-stream' } }
+          );
+        } catch {
+          // one bad file must not block the released result
+        }
+      }
       const type = resulting.testType;
       setResulting(null);
       setResultText('');
       setResultNotes('');
+      setResultFiles([]);
       flash(`Result released for ${type}.`);
       await load();
       onRefresh?.();
@@ -549,6 +595,11 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
             <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${statusClass(t.status)}`}>
               {t.status}
             </span>
+            {t.confirmedAt && (
+              <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-teal-100 text-teal-700">
+                Confirmed{t.confirmedByName ? ` · ${t.confirmedByName}` : ''}
+              </span>
+            )}
             {completed ? (
               <button
                 onClick={() => {
@@ -575,6 +626,7 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
                     setResulting(t);
                     setResultText('');
                     setResultNotes('');
+                    setResultFiles([]);
                   }}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700"
                 >
@@ -646,8 +698,7 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
 
   const tabList: { key: TabKey; label: string; count?: number; icon: typeof User }[] = [
     { key: 'overview', label: 'Overview', icon: User },
-    { key: 'consultations', label: 'Consultations', count: consultations.length, icon: Stethoscope },
-    { key: 'diagnoses', label: 'Diagnoses', count: diagnoses.length, icon: Activity },
+    { key: 'consultations', label: 'Consultations', count: consultations.length + diagnoses.length, icon: Stethoscope },
     { key: 'records', label: 'Records', count: records.length, icon: ClipboardList },
     { key: 'vitals', label: 'Vitals & Notes', count: vitals.length + nursingNotes.length, icon: HeartPulse },
     { key: 'prescriptions', label: 'Prescriptions', count: prescriptions.length, icon: Pill },
@@ -922,7 +973,9 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
                             <ActionBtn icon={Stethoscope} label="New consultation" onClick={() => openForm('consultation')} />
                             <ActionBtn icon={Activity} label="Add diagnosis" onClick={() => openForm('diagnosis')} />
                             <ActionBtn icon={ClipboardList} label="Add record / note" onClick={() => openForm('record')} />
-                            <ActionBtn icon={Pill} label="New prescription" onClick={() => openForm('prescription')} />
+                            {canNewRx && (
+                              <ActionBtn icon={Pill} label="New prescription" onClick={() => openForm('prescription')} />
+                            )}
                             <ActionBtn
                               icon={FlaskConical}
                               label="Order tests"
@@ -1203,14 +1256,33 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
               {tab === 'tests' && (
                 <div className="space-y-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-xs text-gray-500">
-                      Every request is tracked{' '}
-                      <span className="font-semibold text-gray-700">
-                        Ordered → Accepted → Processing → Success
-                      </span>
-                      . Click a finished one to open its result.
-                    </p>
-                    {canClin && (
+                    {/* two views: Request (raise tests) / Report (lab results) */}
+                    <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setTestView('request')}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                          testView === 'request' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        <FlaskConical className="w-3.5 h-3.5" /> Request
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTestView('report')}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                          testView === 'report' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        <FileCheck className="w-3.5 h-3.5" /> Report
+                        {newReportCount > 0 && !reportsCleared && (
+                          <span className="min-w-[1.1rem] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                            {newReportCount > 99 ? '99+' : newReportCount}
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                    {testView === 'request' && canClin && (
                       <button
                         onClick={() => setBuilderOpen((v) => !v)}
                         className="inline-flex items-center gap-1.5 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-700"
@@ -1219,9 +1291,34 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
                         New request
                       </button>
                     )}
+                    {testView === 'request' && (
+                      <p className="w-full text-xs text-gray-500">
+                        Every request is tracked{' '}
+                        <span className="font-semibold text-gray-700">Ordered → Accepted → Processing → Success</span>.
+                        Click a finished one to open its result.
+                      </p>
+                    )}
                   </div>
 
-                  {builderOpen && (
+                  {/* ------------------------------------------------ REPORT view */}
+                  {testView === 'report' && (
+                    <div className="space-y-3">
+                      <p className="text-xs text-gray-500">
+                        Results released by the laboratory — open a report to read the result, download the PDF or any
+                        uploaded result documents.
+                      </p>
+                      {reportedTests.length === 0 ? (
+                        <p className="py-10 text-center text-sm text-gray-500 rounded-lg border border-dashed border-gray-200">
+                          No test reports yet — results appear here once the laboratory releases them.
+                        </p>
+                      ) : (
+                        <div className="space-y-3">{reportedTests.map(renderTest)}</div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ------------------------------------------------ REQUEST view */}
+                  {testView === 'request' && builderOpen && (
                     <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4 space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-xs font-semibold text-gray-600 uppercase">Request type</span>
@@ -1342,6 +1439,8 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
                   )}
 
                   {/* ------------------------------------------------ laboratory */}
+                  {testView === 'request' && (
+                    <>
                   <div>
                     <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-2">
                       <FlaskConical className="w-4 h-4 text-emerald-600" />
@@ -1373,6 +1472,8 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
                       <div className="space-y-3">{imgTests.map(renderTest)}</div>
                     )}
                   </div>
+                    </>
+                  )}
 
                   {/* result entry — only while one is being filled in */}
                   {canResult && resulting && (
@@ -1395,6 +1496,24 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
                         className={field}
                         placeholder="Interpretation notes (optional)"
                       />
+                      {/* not every result is text — allow uploading scanned reports */}
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">
+                          Result documents (optional — PDF, DOC, JPEG)
+                        </label>
+                        <input
+                          type="file"
+                          multiple
+                          accept=".pdf,.doc,.docx,.jpg,.jpeg,application/pdf,image/jpeg"
+                          onChange={(e) => setResultFiles(Array.from(e.target.files || []))}
+                          className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-600 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white hover:file:bg-emerald-700"
+                        />
+                        {resultFiles.length > 0 && (
+                          <p className="mt-1 text-xs text-emerald-700">
+                            {resultFiles.length} file(s) ready to upload
+                          </p>
+                        )}
+                      </div>
                       <div className="flex justify-end gap-2">
                         <button
                           onClick={() => setResulting(null)}
@@ -1424,12 +1543,20 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
                     hint="Editable until 11:59pm on the day they were written — after that they lock."
                   >
                     {canClin && (
-                      <button
-                        onClick={() => openForm('consultation')}
-                        className="inline-flex items-center gap-1.5 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-700"
-                      >
-                        <Plus className="w-4 h-4" /> New consultation
-                      </button>
+                      <span className="inline-flex gap-2">
+                        <button
+                          onClick={() => openForm('diagnosis')}
+                          className="inline-flex items-center gap-1.5 border border-blue-600 text-blue-600 bg-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-50"
+                        >
+                          <Plus className="w-4 h-4" /> Add diagnosis
+                        </button>
+                        <button
+                          onClick={() => openForm('consultation')}
+                          className="inline-flex items-center gap-1.5 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-700"
+                        >
+                          <Plus className="w-4 h-4" /> New consultation
+                        </button>
+                      </span>
                     )}
                   </TabHead>
                   {consultations.length === 0 ? (
@@ -1480,67 +1607,56 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
                       </div>
                     ))
                   )}
-                </div>
-              )}
 
-              {/* ------------------------------------------------ DIAGNOSES */}
-              {tab === 'diagnoses' && (
-                <div className="space-y-3">
-                  <TabHead title="Diagnoses" hint="Problems and their status — locked after the day of entry.">
-                    {canClin && (
-                      <button
-                        onClick={() => openForm('diagnosis')}
-                        className="inline-flex items-center gap-1.5 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-700"
-                      >
-                        <Plus className="w-4 h-4" /> Add diagnosis
-                      </button>
-                    )}
-                  </TabHead>
-                  {diagnoses.length === 0 ? (
-                    <p className="py-10 text-center text-sm text-gray-500">No diagnoses recorded yet.</p>
-                  ) : (
-                    diagnoses.map((d) => (
-                      <div key={d._id} className="rounded-xl border border-gray-200 p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-gray-900">{d.diagnosis}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              {d.diagnosisId} · {d.doctorName || '—'} · {fmtDateTime(d.date || d.createdAt)}
-                              {d.updatedAt && new Date(d.updatedAt) > new Date(d.createdAt)
-                                ? ` · updated ${fmtDateTime(d.updatedAt)}`
-                                : ''}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${statusClass(d.status)}`}>
-                              {d.status}
-                            </span>
-                            {d.editable === false ? (
-                              <span
-                                className="inline-flex items-center gap-1 text-xs text-gray-400"
-                                title="Locked — editable only until 11:59pm on the day of entry"
-                              >
-                                <Lock className="w-3.5 h-3.5" /> Locked
+                  {/* --------------------------------- diagnoses live under Consultations now */}
+                  <div className="pt-4 border-t border-gray-100">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Diagnoses</p>
+                    {diagnoses.length === 0 ? (
+                      <p className="py-6 text-center text-sm text-gray-500">No diagnoses recorded yet.</p>
+                    ) : (
+                      diagnoses.map((d) => (
+                        <div key={d._id} className="rounded-xl border border-gray-200 p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-gray-900">{d.diagnosis}</p>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                {d.diagnosisId} · {d.doctorName || '—'} · {fmtDateTime(d.date || d.createdAt)}
+                                {d.updatedAt && new Date(d.updatedAt) > new Date(d.createdAt)
+                                  ? ` · updated ${fmtDateTime(d.updatedAt)}`
+                                  : ''}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${statusClass(d.status)}`}>
+                                {d.status}
                               </span>
-                            ) : (
-                              <button
-                                onClick={() => openForm('diagnosis', d)}
-                                className="px-2.5 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                              >
-                                Edit
-                              </button>
-                            )}
+                              {d.editable === false ? (
+                                <span
+                                  className="inline-flex items-center gap-1 text-xs text-gray-400"
+                                  title="Locked — editable only until 11:59pm on the day of entry"
+                                >
+                                  <Lock className="w-3.5 h-3.5" /> Locked
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => openForm('diagnosis', d)}
+                                  className="px-2.5 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                                >
+                                  Edit
+                                </button>
+                              )}
+                            </div>
                           </div>
+                          {d.treatment && (
+                            <p className="text-sm text-gray-700 mt-2">
+                              <span className="font-medium">Treatment:</span> {d.treatment}
+                            </p>
+                          )}
+                          {d.notes && <p className="text-sm text-gray-800 whitespace-pre-wrap mt-1">{d.notes}</p>}
                         </div>
-                        {d.treatment && (
-                          <p className="text-sm text-gray-700 mt-2">
-                            <span className="font-medium">Treatment:</span> {d.treatment}
-                          </p>
-                        )}
-                        {d.notes && <p className="text-sm text-gray-800 whitespace-pre-wrap mt-1">{d.notes}</p>}
-                      </div>
-                    ))
-                  )}
+                      ))
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1722,7 +1838,7 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
                     title="Drug prescriptions"
                     hint="Exactly what the pharmacy sees — diagnostics never leave the clinical tabs."
                   >
-                    {canClin && (
+                    {canClin && canNewRx && (
                       <button
                         onClick={() => openForm('prescription')}
                         className="inline-flex items-center gap-1.5 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-700"

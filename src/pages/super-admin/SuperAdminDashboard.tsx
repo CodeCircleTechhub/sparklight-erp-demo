@@ -153,6 +153,7 @@ export default function SuperAdminDashboard() {
           { title: 'Active Staff', value: activeStaff.toLocaleString(), icon: UserCog, color: 'green' },
           { title: "Today's Visits", value: todayVisits.toLocaleString(), icon: ClipboardList, color: 'purple' },
           { title: "Today's Revenue", value: formatNaira(todayRevenue), icon: DollarSign, color: 'green', trend: { value: `${formatNaira(todayBilled)} billed`, isPositive: true } },
+          { title: 'Total Money', value: formatNaira(billingRes.data.paymentsTotal ?? 0), icon: DollarSign, color: 'blue', trend: { value: `${formatNaira(outstandingBills)} outstanding`, isPositive: false } },
           { title: 'Appointments', value: appointments.toLocaleString(), icon: Calendar, color: 'blue' },
           { title: 'Admitted Patients', value: admitted.toLocaleString(), icon: BedDouble, color: 'yellow', trend: dischargedToday ? { value: `+${dischargedToday} out today`, isPositive: true } : undefined },
           { title: 'Pending Lab Requests', value: pendingLab.toLocaleString(), icon: FlaskConical, color: 'red' },

@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Users, AlertTriangle, Heart, Search, Loader2, AlertCircle, BedDouble, Eye } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Users, Search, Loader2, AlertCircle, Eye, LogIn, LogOut, Baby, HeartPulse } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageComponents';
-import { billingBadge } from '../../utils/billingStatus';
+import CategoryTag from '../../components/shared/CategoryTag';
 import PatientHistoryModal from '../../components/shared/PatientHistoryModal';
+import { billingBadge } from '../../utils/billingStatus';
+import { FILTER_OPTIONS } from '../../lib/patientCategories';
 import api from '../../services/api';
 
 const statusColors: Record<string, string> = {
@@ -22,26 +23,23 @@ const fmtWhen = (iso?: string | null) => {
   return `${Math.floor(hrs / 24)} day(s) ago`;
 };
 
-export default function MyPatients() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  // /nurse/my-patients = only my admissions; /nurse/patients = every admitted patient
-  const mine = location.pathname.endsWith('/my-patients');
+export default function AllPatients() {
   const [patients, setPatients] = useState<any[]>([]);
   const [stats, setStats] = useState<any>({});
   const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [invoices, setInvoices] = useState<any[]>([]);
   const [viewing, setViewing] = useState<string | null>(null);
 
-  const fetchPatients = useCallback(async (q: string) => {
+  const fetchPatients = useCallback(async (q: string, cat: string) => {
     setLoading(true);
     setError('');
     try {
       const [patRes, billRes] = await Promise.all([
         api.get('/nurse/patients', {
-          params: { ...(mine ? {} : { all: 1 }), ...(q ? { search: q } : {}) },
+          params: { ...(q ? { search: q } : {}), ...(cat && cat !== 'all' ? { category: cat } : {}) },
         }),
         api.get('/billing/invoices').catch(() => ({ data: { invoices: [] } })),
       ]);
@@ -53,54 +51,29 @@ export default function MyPatients() {
     } finally {
       setLoading(false);
     }
-  }, [mine]);
+  }, []);
 
   useEffect(() => {
-    const t = setTimeout(() => fetchPatients(search.trim()), 300);
+    const t = setTimeout(() => fetchPatients(search.trim(), category), 300);
     return () => clearTimeout(t);
-  }, [search, fetchPatients]);
+  }, [search, category, fetchPatients]);
 
-  const cards = [
-    { label: 'Admitted Patients', value: stats.admitted ?? 0, icon: Users, color: 'text-blue-600', bg: 'bg-blue-100' },
-    { label: 'Assigned to Me', value: stats.mine ?? 0, icon: BedDouble, color: 'text-indigo-600', bg: 'bg-indigo-100' },
-    { label: 'Critical', value: stats.critical ?? 0, icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-100' },
-    { label: 'Stable', value: stats.stable ?? 0, icon: Heart, color: 'text-green-600', bg: 'bg-green-100' },
-  ];
+  const cards = useMemo(
+    () => [
+      { label: 'Out Patient', value: stats.outPatient ?? 0, icon: LogOut, color: 'text-teal-600', bg: 'bg-teal-100' },
+      { label: 'In Patient', value: stats.inPatient ?? 0, icon: LogIn, color: 'text-blue-600', bg: 'bg-blue-100' },
+      { label: 'Pediatric', value: stats.pediatric ?? 0, icon: Baby, color: 'text-orange-600', bg: 'bg-orange-100' },
+      { label: 'Antenatal', value: stats.antenatal ?? 0, icon: HeartPulse, color: 'text-pink-600', bg: 'bg-pink-100' },
+    ],
+    [stats]
+  );
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title={mine ? 'My Patients' : 'All Patients'}
-        description={
-          mine
-            ? 'Patients you are the assigned nurse for — ward, bed and vitals at a glance.'
-            : stats.mineOnly === false
-              ? 'No patients assigned to you yet — showing every admitted patient with assignments'
-              : 'Every admitted patient with doctor & nurse assignments (yours marked MINE)'
-        }
-        icon={mine ? Heart : Users}
-        action={
-          <div className="inline-flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
-            <button
-              type="button"
-              onClick={() => navigate('/nurse/my-patients')}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                mine ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Heart className="w-3.5 h-3.5" /> Mine
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/nurse/patients')}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                !mine ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5" /> All
-            </button>
-          </div>
-        }
+        title="All Patients"
+        description="Every registered patient — open any chart for full history, notes, prescriptions and lab results."
+        icon={Users}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -128,15 +101,34 @@ export default function MyPatients() {
 
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="p-4 border-b border-gray-200">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name, phone no. or patient ID..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by name, phone no. or patient ID..."
+                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="category-filter" className="text-xs font-semibold text-gray-500 uppercase">
+                Category
+              </label>
+              <select
+                id="category-filter"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {FILTER_OPTIONS.map((opt) => (
+                  <option key={`${opt.group}-${opt.value}`} value={opt.value}>
+                    {opt.group ? `${opt.group} › ${opt.label}` : opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -145,16 +137,16 @@ export default function MyPatients() {
               <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading patients...
             </div>
           ) : patients.length === 0 ? (
-            <p className="py-12 text-center text-sm text-gray-500">No admitted patients found.</p>
+            <p className="py-12 text-center text-sm text-gray-500">No patients found.</p>
           ) : (
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-50">
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Patient ID</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Name</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Assigned To</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Ward</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Room</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Category</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Care Type</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Ward / Room</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Condition</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Last Vitals</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
@@ -166,33 +158,26 @@ export default function MyPatients() {
                 {patients.map((patient) => (
                   <tr key={patient._id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-medium text-blue-600">{patient.patientId}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">
-                      {patient.name}
-                      {patient.assignedToMe && (
-                        <span className="ml-2 text-[11px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-semibold">
-                          MINE
-                        </span>
-                      )}
+                    <td className="px-4 py-3 text-sm text-gray-900">{patient.name}</td>
+                    <td className="px-4 py-3">
+                      <CategoryTag categoryKey={patient.categoryKey} category={patient.category} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
+                          patient.admitted ? 'bg-blue-100 text-blue-700' : 'bg-teal-100 text-teal-700'
+                        }`}
+                      >
+                        {patient.careType || (patient.admitted ? 'In Patient' : 'Out Patient')}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">
-                      {patient.assignedDoctor || patient.assignedNurse ? (
-                        <span className="space-x-1">
-                          {patient.assignedDoctor && <span className="font-medium text-gray-900">Dr. {patient.assignedDoctor}</span>}
-                          {patient.assignedDoctor && patient.assignedNurse && <span className="text-gray-400">·</span>}
-                          {patient.assignedNurse && <span>{patient.assignedNurse} (nurse)</span>}
-                        </span>
-                      ) : (
-                        '—'
-                      )}
+                      {patient.admitted ? [patient.ward, patient.room].filter(Boolean).join(' / ') || '—' : '—'}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{patient.ward || '—'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{patient.room || '—'}</td>
                     <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate">{patient.condition || '—'}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">
                       {patient.lastVitals
-                        ? `${fmtWhen(patient.lastChecked)}${
-                            patient.lastVitals.bp ? ` · BP ${patient.lastVitals.bp}` : ''
-                          }`
+                        ? `${fmtWhen(patient.lastChecked)}${patient.lastVitals.bp ? ` · BP ${patient.lastVitals.bp}` : ''}`
                         : 'No vitals yet'}
                     </td>
                     <td className="px-4 py-3">
@@ -235,7 +220,7 @@ export default function MyPatients() {
         <PatientHistoryModal
           patientId={viewing}
           onClose={() => setViewing(null)}
-          onRefresh={() => fetchPatients(search.trim())}
+          onRefresh={() => fetchPatients(search.trim(), category)}
         />
       )}
     </div>

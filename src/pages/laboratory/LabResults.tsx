@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { CheckCircle, Clock, ClipboardList, Loader2, AlertCircle, X, Eye, Download, FileText, Paperclip } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageComponents';
+import LabHistoryModal from '../../components/laboratory/LabHistoryModal';
 import api from '../../services/api';
 import { downloadLabResultPdf, downloadLabAttachment } from '../../utils/downloadLabFile';
 
@@ -24,6 +25,7 @@ export default function LabResults() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [viewing, setViewing] = useState<any | null>(null);
+  const [history, setHistory] = useState<any | null>(null);
   const [dlBusy, setDlBusy] = useState(false);
   const [dlError, setDlError] = useState('');
 
@@ -133,13 +135,23 @@ export default function LabResults() {
                         <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[st]}`}>{st}</span>
                       </td>
                       <td className="px-4 py-3">
-                        <button
-                          onClick={() => setViewing(r)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-700 rounded-lg text-xs font-medium hover:border-[#3b82f6] hover:text-[#3b82f6] transition-colors"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          View
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            onClick={() => setViewing(r)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-700 rounded-lg text-xs font-medium hover:border-[#3b82f6] hover:text-[#3b82f6] transition-colors"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            View
+                          </button>
+                          <button
+                            onClick={() => setHistory(r)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+                            title="View this patient's full lab history"
+                          >
+                            <ClipboardList className="w-3.5 h-3.5" />
+                            History
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -244,6 +256,15 @@ export default function LabResults() {
             </div>
           </div>
         </div>
+      )}
+
+      {history && (
+        <LabHistoryModal
+          patientId={history.patient?._id || history.patient}
+          patientName={patName(history)}
+          initialTab="result"
+          onClose={() => setHistory(null)}
+        />
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Printer, Download, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import api from '../../services/api';
 
@@ -19,13 +20,24 @@ const fmtDateTime = (d?: string | Date) =>
 const PRINT_CSS = `
 @media print {
   body.receipt-print-mode { background: #ffffff !important; }
+  /* drop every other top-level block so no blank page is reserved behind the receipt */
+  body.receipt-print-mode > *:not(.receipt-print-root) { display: none !important; }
+  /* fixed overlays are repeated on every printed page — pin the receipt to normal flow */
+  body.receipt-print-mode .receipt-print-root {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    background: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    z-index: auto !important;
+  }
   body.receipt-print-mode * { visibility: hidden !important; }
   body.receipt-print-mode .receipt-printable,
   body.receipt-print-mode .receipt-printable * { visibility: visible !important; }
   body.receipt-print-mode .receipt-printable {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
+    position: static !important;
     width: 100% !important;
     max-width: none !important;
     margin: 0 !important;
@@ -96,9 +108,9 @@ export default function ReceiptModal({ invoiceId, onClose }: Props) {
   const totals = data?.totals || { billed: 0, paid: 0, balance: 0 };
   const paid = invoice?.status === 'Paid';
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="receipt-print-root fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       onClick={() => onClose()}
       onKeyDown={(e) => e.key === 'Escape' && onClose()}
     >
@@ -261,6 +273,7 @@ export default function ReceiptModal({ invoiceId, onClose }: Props) {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { TestTube, CheckCircle, XCircle, Clock, Loader2, AlertCircle, X } from 'lucide-react';
+import { TestTube, CheckCircle, XCircle, Clock, Loader2, AlertCircle, X, Eye } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageComponents';
+import LabHistoryModal from '../../components/laboratory/LabHistoryModal';
 import api from '../../services/api';
 
 const statusColors: Record<string, string> = {
@@ -25,6 +26,7 @@ export default function SampleCollection() {
   const [rejectReason, setRejectReason] = useState('');
   const [rejectBusy, setRejectBusy] = useState(false);
   const [rejectError, setRejectError] = useState('');
+  const [viewing, setViewing] = useState<any | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -169,32 +171,40 @@ export default function SampleCollection() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        {st === 'Pending' && s.status !== 'Cancelled' ? (
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => collect(s)}
-                              disabled={!!busyId}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#3b82f6] text-white rounded-lg text-xs font-medium hover:bg-blue-600 transition-colors disabled:opacity-60"
-                            >
-                              {busyId === s._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
-                              Collect
-                            </button>
-                            <button
-                              onClick={() => {
-                                setRejectTarget(s);
-                                setRejectReason('');
-                                setRejectError('');
-                              }}
-                              disabled={!!busyId}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-red-200 text-red-600 rounded-lg text-xs font-medium hover:bg-red-50 transition-colors disabled:opacity-60"
-                            >
-                              <XCircle className="w-3.5 h-3.5" />
-                              Reject
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-400">—</span>
-                        )}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            onClick={() => setViewing(s)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 bg-white text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+                            title="View sample collection & lab history for this patient"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            View
+                          </button>
+                          {st === 'Pending' && s.status !== 'Cancelled' && (
+                            <>
+                              <button
+                                onClick={() => collect(s)}
+                                disabled={!!busyId}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#3b82f6] text-white rounded-lg text-xs font-medium hover:bg-blue-600 transition-colors disabled:opacity-60"
+                              >
+                                {busyId === s._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                                Collect
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setRejectTarget(s);
+                                  setRejectReason('');
+                                  setRejectError('');
+                                }}
+                                disabled={!!busyId}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-red-200 text-red-600 rounded-lg text-xs font-medium hover:bg-red-50 transition-colors disabled:opacity-60"
+                              >
+                                <XCircle className="w-3.5 h-3.5" />
+                                Reject
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -255,6 +265,15 @@ export default function SampleCollection() {
             </div>
           </div>
         </div>
+      )}
+
+      {viewing && (
+        <LabHistoryModal
+          patientId={viewing.patient?._id || viewing.patient}
+          patientName={patName(viewing)}
+          initialTab="sample"
+          onClose={() => setViewing(null)}
+        />
       )}
     </div>
   );
