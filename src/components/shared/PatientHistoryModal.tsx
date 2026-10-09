@@ -160,6 +160,20 @@ const fmtDateTime = (d?: string | null) =>
       })
     : '—';
 
+// Vitals & Notes tab: 12-hour clock with am/pm in Nigeria time (WAT)
+const fmtDateTimeNG = (d?: string | null) =>
+  d
+    ? new Date(d).toLocaleString('en-NG', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'Africa/Lagos',
+      })
+    : '—';
+
 function ActionBtn({ icon: Icon, label, onClick }: { icon: any; label: string; onClick: () => void }) {
   return (
     <button
@@ -1786,7 +1800,7 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
                           <tbody className="divide-y divide-gray-200">
                             {vitals.slice(0, 25).map((v) => (
                               <tr key={v._id} className="hover:bg-gray-50 text-sm">
-                                <td className="px-3 py-2 text-gray-600">{fmtDateTime(v.recordedAt || v.createdAt)}</td>
+                                <td className="px-3 py-2 text-gray-600">{fmtDateTimeNG(v.recordedAt || v.createdAt)}</td>
                                 <td className="px-3 py-2 text-gray-800">{v.temperature ?? '—'}</td>
                                 <td className="px-3 py-2 text-gray-800">{v.bp || '—'}</td>
                                 <td className="px-3 py-2 text-gray-800">{v.pulse ?? '—'}</td>
@@ -1820,7 +1834,7 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
                         <div key={n._id} className="rounded-xl border border-gray-200 p-4">
                           <div className="flex items-center justify-between gap-3">
                             <p className="text-sm font-semibold text-gray-900">{n.noteType}</p>
-                            <span className="text-xs text-gray-400">{fmtDateTime(n.createdAt)}</span>
+                            <span className="text-xs text-gray-400">{fmtDateTimeNG(n.createdAt)}</span>
                           </div>
                           <p className="text-sm text-gray-800 whitespace-pre-wrap mt-1">{n.notes}</p>
                           <p className="text-xs text-gray-400 mt-1">{n.nurseName || ''}</p>

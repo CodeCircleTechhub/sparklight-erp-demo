@@ -1,4 +1,4 @@
-// Patient category tags (Baby, Child, Adolescent, Adult sub-kinds, Senior,
+// Patient category tags (Neonate, Child, Adolescent, Adult sub-kinds, Senior,
 // Antenatal). The backend sends `category` (label) + `categoryKey`; these
 // helpers cover fallbacks, colours and the filter dropdown.
 
@@ -11,7 +11,7 @@ export interface CategoryMeta {
 
 export const CATEGORIES: CategoryMeta[] = [
   { key: 'antenatal', label: 'Antenatal', group: 'antenatal', className: 'bg-pink-100 text-pink-700 ring-pink-200' },
-  { key: 'baby', label: 'Baby', group: 'pediatric', className: 'bg-amber-100 text-amber-700 ring-amber-200' },
+  { key: 'baby', label: 'Neonate', group: 'pediatric', className: 'bg-amber-100 text-amber-700 ring-amber-200' },
   { key: 'child', label: 'Child', group: 'pediatric', className: 'bg-orange-100 text-orange-700 ring-orange-200' },
   { key: 'adolescent', label: 'Adolescent', group: 'pediatric', className: 'bg-violet-100 text-violet-700 ring-violet-200' },
   { key: 'young-adult', label: 'Young Adult', group: 'adult', className: 'bg-blue-100 text-blue-700 ring-blue-200' },
@@ -36,7 +36,7 @@ export const categoryMeta = (key?: string | null, label?: string | null): Catego
 export const FILTER_OPTIONS = [
   { value: 'all', label: 'All categories', group: '' },
   { value: 'antenatal', label: 'Antenatal', group: '' },
-  { value: 'baby', label: 'Baby', group: 'Pediatric' },
+  { value: 'baby', label: 'Neonate', group: 'Pediatric' },
   { value: 'child', label: 'Child', group: 'Pediatric' },
   { value: 'adolescent', label: 'Adolescent', group: 'Pediatric' },
   { value: 'adult', label: 'All adults', group: 'Adult' },
