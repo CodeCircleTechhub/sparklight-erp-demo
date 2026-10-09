@@ -1042,6 +1042,61 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
           </div>
         )}
 
+        {/* vitals history — shown above the assignment note on the consultation page */}
+        {!loading && data && (tab === 'consultations' || form?.kind === 'consultation') && (
+          <div className="mx-4 mt-3 rounded-lg border border-rose-200 bg-rose-50/60 px-4 py-2.5 text-sm">
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-rose-700 uppercase mb-1.5">
+              <HeartPulse className="w-4 h-4" /> Vitals history
+            </p>
+            {vitals.length === 0 ? (
+              <p className="text-sm text-gray-500">No vitals recorded yet for this patient.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-[11px] uppercase text-gray-500">
+                      <th className="py-1 pr-3 font-semibold">Date</th>
+                      <th className="py-1 pr-3 font-semibold">Time</th>
+                      <th className="py-1 pr-3 font-semibold">Temp</th>
+                      <th className="py-1 pr-3 font-semibold">BP</th>
+                      <th className="py-1 pr-3 font-semibold">Pulse</th>
+                      <th className="py-1 pr-3 font-semibold">Resp</th>
+                      <th className="py-1 pr-3 font-semibold">SpO₂</th>
+                      <th className="py-1 pr-3 font-semibold">Pain</th>
+                      <th className="py-1 pr-3 font-semibold">Written by</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-rose-100">
+                    {vitals.slice(0, 6).map((v) => {
+                      const at = new Date(v.recordedAt || v.createdAt);
+                      return (
+                        <tr key={v._id} className="text-gray-700">
+                          <td className="py-1.5 pr-3 whitespace-nowrap">
+                            {at.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </td>
+                          <td className="py-1.5 pr-3 whitespace-nowrap">
+                            {at.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Africa/Lagos' })}
+                          </td>
+                          <td className="py-1.5 pr-3">{v.temperature ?? '—'}°C</td>
+                          <td className="py-1.5 pr-3">{v.bp || '—'}</td>
+                          <td className="py-1.5 pr-3">{v.pulse ?? '—'}</td>
+                          <td className="py-1.5 pr-3">{v.respRate ?? '—'}</td>
+                          <td className="py-1.5 pr-3">{v.o2Sat ?? '—'}%</td>
+                          <td className="py-1.5 pr-3">{v.painLevel ?? '—'}</td>
+                          <td className="py-1.5 pr-3">
+                            {v.recordedByName || v.recordedBy?.fullName || '—'}
+                            {v.recordedBy?.staffId ? ` (${v.recordedBy.staffId})` : ''}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* assignment banner — always visible, whatever tab is open */}
         {!loading && data && (
           <div
