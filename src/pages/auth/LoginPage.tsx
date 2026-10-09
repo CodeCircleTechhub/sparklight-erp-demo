@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, Shield, BarChart3, Users, Building2, ArrowLeft, AlertCircle, Loader2, User } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Shield, BarChart3, Users, ArrowLeft, AlertCircle, Loader2, User } from 'lucide-react';
 import Logo from '../../components/logo/Logo';
 import { useAuth } from '../../contexts/AuthContext';
 import { getDashboardRoute } from '../../utils/dashboardRoutes';
@@ -12,7 +12,7 @@ const mainRoles: { id: Role; label: string; icon: typeof Shield }[] = [
   { id: 'admin', label: 'Admin', icon: Shield },
   { id: 'manager', label: 'Manager', icon: BarChart3 },
   { id: 'staff', label: 'Staff', icon: Users },
-  { id: 'patient', label: 'Patient', icon: Building2 },
+  // { id: 'patient', label: 'Patient', icon: Building2 },
 ];
 
 const staffRoles: { id: StaffRole; label: string }[] = [

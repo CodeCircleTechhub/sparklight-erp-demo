@@ -34,6 +34,8 @@ import {
   FileCheck,
   Scissors,
   Pencil,
+  Users,
+  UserPlus,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
@@ -51,6 +53,7 @@ import {
   FollowUpForm,
   PatientForm,
 } from './emr/EmrForms';
+import AddRelativeModal from './AddRelativeModal';
 
 type TabKey =
   | 'overview'
@@ -83,6 +86,8 @@ const EMG_MARK_ROLES = ['super-admin', 'manager', 'receptionist', 'customer-care
 const EMG_REMOVE_ROLES = ['super-admin', 'manager', 'receptionist', 'customer-care', 'senior-customer-care', 'doctor', 'nurse'];
 // surgery button + notes: clinicians only (matches backend WRITE_ROLES)
 const SURGERY_ROLES = ['super-admin', 'manager', 'doctor', 'nurse'];
+// adding a relative to the family card: front desk + admin (matches /family/relatives)
+const RELATIVE_ROLES = ['super-admin', 'manager', 'receptionist', 'customer-care', 'senior-customer-care'];
 const PHARMACY_TABS = ['overview', 'prescriptions', 'billing', 'history'];
 
 const kindMeta: Record<string, { label: string; className: string }> = {
@@ -329,6 +334,21 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
     api.post('/laboratory/seen', { ids: unseen }).catch(() => {});
   }, [testView, tests]);
 
+  // family card badge: "registered under family number X · head of family Y"
+  const [familyInfo, setFamilyInfo] = useState<any>(null);
+  const [relativeOpen, setRelativeOpen] = useState(false);
+
+  useEffect(() => {
+    if (data?.patient?.cardType !== 'Family') {
+      setFamilyInfo(null);
+      return;
+    }
+    api
+      .get('/family/details', { params: { patient: patientId } })
+      .then(({ data: fam }) => setFamilyInfo(fam))
+      .catch(() => setFamilyInfo(null));
+  }, [data?.patient?.cardType, patientId]);
+
   const consultations: any[] = useMemo(() => data?.consultations || [], [data]);
   const diagnoses: any[] = useMemo(() => data?.diagnoses || [], [data]);
   const records: any[] = useMemo(() => data?.records || [], [data]);
@@ -372,6 +392,7 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
   const canMarkEmergency = EMG_MARK_ROLES.includes(role);
   const canClearEmergency = EMG_REMOVE_ROLES.includes(role);
   const canSurgery = SURGERY_ROLES.includes(role);
+  const canAddRelative = RELATIVE_ROLES.includes(role);
   const canResult = LAB_ROLES.includes(role);
   const canDownloadDocs = ['super-admin', 'manager', 'laboratory', 'doctor'].includes(role) || isNurseRole(rawRole);
   const canDispense = PHARM_ROLES.includes(role);
@@ -868,6 +889,18 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
                   <Droplet className="w-3.5 h-3.5" /> {patient.bloodGroup}
                 </span>
               )}
+              {familyInfo?.isFamily && (
+                <span
+                  className="inline-flex items-center gap-1 font-medium text-blue-700"
+                  title={`Registered under family card ${familyInfo.cardNumber}`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  Registered under family no. {familyInfo.cardNumber} · Head: {familyInfo.headName}
+                  {familyInfo.relationship && familyInfo.relationship !== 'Head of family'
+                    ? ` · ${familyInfo.relationship}`
+                    : ''}
+                </span>
+              )}
               {data?.context?.ward && (
                 <span className="inline-flex items-center gap-1 font-medium text-gray-700">
                   <BedDouble className="w-3.5 h-3.5 text-blue-600" />
@@ -879,6 +912,15 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {!loading && patient && familyInfo?.isFamily && canAddRelative && (
+              <button
+                onClick={() => setRelativeOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700"
+                title="Register a relative onto this family card"
+              >
+                <UserPlus className="w-4 h-4" /> Add relative
+              </button>
+            )}
             {!loading && surgery.active && (
               <span
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide bg-rose-600 text-white"
@@ -2429,6 +2471,21 @@ export default function PatientHistoryModal({ patientId, onClose, onRefresh }: P
             </div>
           </div>
         </div>
+      )}
+
+      {relativeOpen && (
+        <AddRelativeModal
+          patientId={patientId}
+          patientName={patient?.name || ''}
+          onClose={() => setRelativeOpen(false)}
+          onSaved={(msg) => {
+            setRelativeOpen(false);
+            flash(msg);
+            load()
+              .then(() => onRefresh?.())
+              .catch(() => {});
+          }}
+        />
       )}
     </div>
   );

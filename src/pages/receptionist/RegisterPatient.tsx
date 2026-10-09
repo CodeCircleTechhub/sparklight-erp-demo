@@ -17,8 +17,6 @@ const initialForm = {
   nextOfKin: '',
   nextOfKinPhone: '',
   relationship: '',
-  bloodGroup: '',
-  genotype: '',
   maritalStatus: '',
   occupation: '',
   emergencyContact: '',
@@ -306,21 +304,6 @@ export default function RegisterPatient() {
 
             <div className="sm:col-span-3 border-t border-gray-100 pt-4 mt-2">
               <h3 className="text-sm font-semibold text-gray-900 mb-3">Medical Info</h3>
-            </div>
-            <div>
-              <label className={labelClass}>Blood Group</label>
-              <select value={form.bloodGroup} onChange={(e) => set('bloodGroup', e.target.value)} className={inputClass}>
-                <option value="">Select</option>
-                <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
-                <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Genotype</label>
-              <select value={form.genotype} onChange={(e) => set('genotype', e.target.value)} className={inputClass}>
-                <option value="">Select</option>
-                <option>AA</option><option>AS</option><option>AC</option><option>SS</option><option>SC</option>
-              </select>
             </div>
             <div>
               <label className={labelClass}>Marital Status</label>

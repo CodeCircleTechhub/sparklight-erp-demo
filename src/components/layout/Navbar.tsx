@@ -15,7 +15,7 @@ const navLinks = [
 const loginOptions = [
   { label: 'Admin Login', to: '/login' },
   { label: 'Staff Login', to: '/login' },
-  { label: 'Patient Login', to: '/login' },
+  // { label: 'Patient Login', to: '/login' },
 ];
 
 export default function Navbar() {

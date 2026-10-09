@@ -89,6 +89,7 @@ import Escalations from './pages/customer-care/Escalations';
 import InternalRequests from './pages/customer-care/InternalRequests';
 import PatientsBalances from './pages/customer-care/PatientsBalances';
 import CareDischargedPatients from './pages/customer-care/DischargedPatients';
+import FamilyCards from './pages/shared/FamilyCards';
 
 // Nurse Pages
 import NurseDashboard from './pages/nurse/NurseDashboard';
@@ -230,6 +231,7 @@ function AppRoutes() {
         <Route path="discharged" element={<AdminDischargedPatients />} />
         <Route path="patients/register" element={<RegisterPatient />} />
         <Route path="patients/visits" element={<PatientVisits />} />
+        <Route path="family-cards" element={<FamilyCards />} />
         <Route path="appointments" element={<AdminAppointmentsList />} />
         <Route path="appointments/today" element={<TodayAppointments />} />
         <Route path="queue" element={<AdminQueue />} />
@@ -290,6 +292,7 @@ function AppRoutes() {
       <Route path="/receptionist" element={<DashboardLayout role="receptionist" />}>
         <Route path="dashboard" element={<ReceptionistDashboard />} />
         <Route path="register-patient" element={<ReceptionistRegisterPatient />} />
+        <Route path="family-cards" element={<FamilyCards />} />
         <Route path="patient-search" element={<PatientSearch />} />
         <Route path="patient-visits" element={<ReceptionistPatientVisits />} />
         <Route path="appointments" element={<ReceptionistAppointments />} />
@@ -310,6 +313,7 @@ function AppRoutes() {
         <Route path="enquiries" element={<Enquiries />} />
         <Route path="complaints" element={<Complaints />} />
         <Route path="patients" element={<PatientsBalances />} />
+        <Route path="family-cards" element={<FamilyCards />} />
         <Route path="discharged" element={<CareDischargedPatients />} />
         <Route path="feedback" element={<CareFeedback />} />
         <Route path="appointments" element={<CareAppointments />} />

@@ -50,6 +50,7 @@ import {
   TestTube,
   CalendarOff,
   KeyRound,
+  Contact,
 } from 'lucide-react';
 import Logo from '../logo/Logo';
 import type { LucideIcon } from 'lucide-react';
@@ -86,6 +87,7 @@ const frontDeskNav: NavItem[] = [
   { label: 'Front Desk Dashboard', to: '/receptionist/dashboard', icon: LayoutDashboard },
   { label: 'Customer Care Dashboard', to: '/customer-care/dashboard', icon: Users },
   { label: 'Register Patient', to: '/receptionist/register-patient', icon: UserPlus },
+  { label: 'Family Cards', to: '/receptionist/family-cards', icon: Contact },
   { label: 'Patient Search', to: '/receptionist/patient-search', icon: Search },
   { label: 'Patient Visits', to: '/receptionist/patient-visits', icon: ClipboardList },
   { label: 'Front Desk Appointments', to: '/receptionist/appointments', icon: Calendar },
@@ -119,6 +121,7 @@ const navConfig: Record<UserRole, NavItem[]> = {
       children: [
         { label: 'All Patients', to: '/admin/patients' },
         { label: 'Register Patient', to: '/admin/patients/register' },
+        { label: 'Family Cards', to: '/admin/family-cards' },
         { label: 'Patient Visits', to: '/admin/patients/visits' },
         { label: 'Discharged Patients', to: '/admin/discharged' },
       ],
