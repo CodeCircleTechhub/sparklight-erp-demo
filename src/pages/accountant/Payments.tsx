@@ -30,14 +30,26 @@ export default function Payments() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [viewRow, setViewRow] = useState<any | null>(null);
+  const [unpaidByPatient, setUnpaidByPatient] = useState<Record<string, number>>({});
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       setError('');
       try {
-        const { data } = await api.get('/billing/payments');
-        setPayments(data.payments || []);
+        const [payRes, invRes] = await Promise.all([
+          api.get('/billing/payments'),
+          api.get('/billing/invoices').catch(() => ({ data: {} })),
+        ]);
+        setPayments(payRes.data.payments || []);
+        const unpaid: Record<string, number> = {};
+        (invRes.data.invoices || []).forEach((inv: any) => {
+          if (inv.status === 'Pending' || inv.status === 'Overdue') {
+            const id = inv.patient?._id || inv.patient;
+            if (id) unpaid[id] = (unpaid[id] || 0) + 1;
+          }
+        });
+        setUnpaidByPatient(unpaid);
       } catch (err: any) {
         setError(err.response?.data?.message || 'Failed to load payments');
       } finally {
@@ -58,6 +70,20 @@ export default function Payments() {
     { label: 'This Month', value: money(sumFrom(monthStart)), icon: DollarSign, color: 'bg-purple-500' },
     { label: 'Total', value: money(payments.reduce((s, p) => s + (p.amount || 0), 0)), icon: CreditCard, color: 'bg-amber-500' },
   ];
+
+  // a patient is only "Completed" once nothing is pending for them — pending
+  // means an unsettled payment record OR an unpaid (Pending/Overdue) invoice
+  const pendingByPatient: Record<string, number> = {};
+  const paidByPatient: Record<string, number> = {};
+  payments.forEach((p) => {
+    const id = patientIdOf(p);
+    if (!id) return;
+    if (p.status === 'Pending') pendingByPatient[id] = (pendingByPatient[id] || 0) + 1;
+    if (p.status === 'Completed' || p.status === 'Refunded') paidByPatient[id] = (paidByPatient[id] || 0) + 1;
+  });
+  const pendingCountFor = (p: any) =>
+    (pendingByPatient[patientIdOf(p)] || 0) + (unpaidByPatient[patientIdOf(p)] || 0);
+  const paidCountFor = (p: any) => paidByPatient[patientIdOf(p)] || 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -102,7 +128,10 @@ export default function Payments() {
                 </tr>
               </thead>
               <tbody>
-                {payments.map((p) => (
+                {payments.map((p) => {
+                  const pendingCount = pendingCountFor(p);
+                  const paidCount = paidCountFor(p);
+                  return (
                   <tr key={p._id || p.paymentId} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                     <td className="px-5 py-4 text-sm font-medium text-[#3b82f6]">{p.paymentId}</td>
                     <td className="px-5 py-4 text-sm text-gray-900">{patientLabel(p)}</td>
@@ -110,7 +139,19 @@ export default function Payments() {
                     <td className="px-5 py-4 text-sm font-medium text-gray-900">₦{(p.amount || 0).toLocaleString()}</td>
                     <td className="px-5 py-4 text-sm text-gray-500">{p.method}</td>
                     <td className="px-5 py-4 text-sm text-gray-500">{fmtDate(p.date)}</td>
-                    <td className="px-5 py-4"><StatusBadge status={p.status} color={getStatusColor(p.status) as any} /></td>
+                    <td className="px-5 py-4">
+                      {pendingCount > 0 ? (
+                        <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                          {paidCount > 0
+                            ? `${paidCount} Paid · ${pendingCount} Pending`
+                            : pendingCount === 1
+                              ? 'Pending (1 payment)'
+                              : `Pending (${pendingCount} payments)`}
+                        </span>
+                      ) : (
+                        <StatusBadge status={p.status} color={getStatusColor(p.status) as any} />
+                      )}
+                    </td>
                     <td className="px-5 py-4">
                       <button
                         onClick={() => setViewRow({ patientId: patientIdOf(p), patientName: patientLabel(p) })}
@@ -122,7 +163,8 @@ export default function Payments() {
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
                 {payments.length === 0 && (
                   <tr>
                     <td colSpan={8} className="py-8 text-center text-sm text-gray-400">No payments found</td>

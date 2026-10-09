@@ -36,7 +36,21 @@ export default function Medicines() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [categories, setCategories] = useState<string[]>([]);
   const debounce = useRef<number | null>(null);
+
+  const loadCategories = useCallback(async () => {
+    try {
+      const { data } = await api.get('/pharmacy/categories');
+      setCategories(
+        (data.categories || [])
+          .map((c: any) => String(c?.name || '').trim())
+          .filter((n: string) => n && n !== 'Uncategorized')
+      );
+    } catch {
+      /* categories are optional for the form */
+    }
+  }, []);
 
   const load = useCallback(async (q = '') => {
     setLoading(true);
@@ -54,7 +68,8 @@ export default function Medicines() {
 
   useEffect(() => {
     load();
-  }, [load]);
+    loadCategories();
+  }, [load, loadCategories]);
 
   const onSearch = (q: string) => {
     setSearch(q);
@@ -117,6 +132,7 @@ export default function Medicines() {
       }
       setShowForm(false);
       await load(search);
+      await loadCategories();
     } catch (err: any) {
       setFormError(err.response?.data?.message || 'Failed to save medicine');
     } finally {
@@ -146,6 +162,9 @@ export default function Medicines() {
   ];
 
   const field = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
+
+  // dropdown options = every added category (+ keep a currently edited value visible)
+  const categoryOptions = Array.from(new Set([...categories, ...(form.category ? [form.category] : [])]));
 
   return (
     <div className="space-y-6">
@@ -287,7 +306,18 @@ export default function Medicines() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className={field} placeholder="e.g. Antibiotic" />
+                <select
+                  value={form.category}
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                  className={field}
+                >
+                  <option value="">Uncategorized</option>
+                  {categoryOptions.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
